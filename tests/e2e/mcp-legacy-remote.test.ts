@@ -633,7 +633,7 @@ describe("version-scoped legacy MCP remote transports", () => {
           ], {
             models: [{ id: MODEL, type: "language", tags: ["tool-use"] }],
           });
-          const binary = join(REPO_ROOT, "zig-out", "bin", "fx");
+          const binary = join(REPO_ROOT, "zig-out", "bin", "ax");
           tui = await TmuxSession.create({
             isolated: true,
             cwd: root.workspace,

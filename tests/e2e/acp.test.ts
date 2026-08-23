@@ -1149,7 +1149,7 @@ async function continueRecovery(client: AcpClient, timeoutMs = LIVE_TIMEOUT) {
     method: "session/prompt",
     params: {
       prompt: [],
-      _meta: { ax: { continueRecovery: true } },
+      _meta: { fx: { continueRecovery: true } },
     },
   });
 

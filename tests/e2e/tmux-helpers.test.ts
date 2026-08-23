@@ -183,7 +183,7 @@ tmuxTest("tmux launch scrubs stale overrides without storing explicit credential
         socketName,
         "display-message",
         "-t",
-        `${session.name}:0.0`,
+        `${session.paneId}`,
         "-p",
         "#{pane_start_command}",
       ],

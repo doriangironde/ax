@@ -89,6 +89,31 @@ export function parseSingleChildPid(output: string, parentPid: number): number {
   return pid;
 }
 
+function resolveWindowIndex(tmuxPrefix: string[], name: string): number {
+  const raw = execFileSync(
+    "tmux",
+    [...tmuxPrefix, "display-message", "-t", name, "-p", "#{window_index}"],
+    { stdio: "pipe", encoding: "utf-8" },
+  ).trim();
+  const value = Number.parseInt(raw, 10);
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error(`Invalid tmux window index: ${JSON.stringify(raw)}`);
+  }
+  return value;
+}
+
+function resolvePaneId(tmuxPrefix: string[], name: string): string {
+  const raw = execFileSync(
+    "tmux",
+    [...tmuxPrefix, "display-message", "-t", name, "-p", "#{pane_id}"],
+    { stdio: "pipe", encoding: "utf-8" },
+  ).trim();
+  if (!raw.startsWith("%")) {
+    throw new Error(`Invalid tmux pane id: ${JSON.stringify(raw)}`);
+  }
+  return raw;
+}
+
 export function buildObservedCommand(
   command: string,
   stderrPath: string | undefined,
@@ -411,13 +436,23 @@ export function startDynamicFakeGateway(
 
 export class TmuxSession {
   readonly name: string;
+  readonly windowIndex: number;
+  readonly paneId: string;
   private readonly socketName?: string;
   private readonly exitStatusPath: string;
   private killed = false;
 
-  private constructor(name: string, exitStatusPath: string, socketName?: string) {
+  private constructor(
+    name: string,
+    exitStatusPath: string,
+    windowIndex: number,
+    paneId: string,
+    socketName?: string,
+  ) {
     this.name = name;
     this.exitStatusPath = exitStatusPath;
+    this.windowIndex = windowIndex;
+    this.paneId = paneId;
     this.socketName = socketName;
   }
 
@@ -587,7 +622,7 @@ export class TmuxSession {
         "set-option",
         "-w",
         "-t",
-        `${name}:0`,
+        name,
         "history-limit",
         String(Math.max(serverHistoryLines!, minimumHistoryLines)),
         ";",
@@ -651,7 +686,15 @@ export class TmuxSession {
       rmSync(exitStatusPath, { force: true });
       throw err;
     }
-    const session = new TmuxSession(name, exitStatusPath, resolvedSocketName);
+    const resolvedWindowIndex = resolveWindowIndex(tmuxPrefix, name);
+    const resolvedPaneId = resolvePaneId(tmuxPrefix, name);
+    const session = new TmuxSession(
+      name,
+      exitStatusPath,
+      resolvedWindowIndex,
+      resolvedPaneId,
+      resolvedSocketName,
+    );
     try {
       for (const key of AUTH_ENV_KEYS) {
         try {
@@ -667,12 +710,12 @@ export class TmuxSession {
       if (remainOnExit) {
         execFileSync(
           "tmux",
-          [...tmuxPrefix, "set-option", "-w", "-t", `${name}:0`, "remain-on-exit", "on"],
+          [...tmuxPrefix, "set-option", "-w", "-t", `${name}:${resolvedWindowIndex}`, "remain-on-exit", "on"],
           { stdio: "pipe" },
         );
         const value = execFileSync(
           "tmux",
-          [...tmuxPrefix, "show-options", "-w", "-v", "-t", `${name}:0`, "remain-on-exit"],
+          [...tmuxPrefix, "show-options", "-w", "-v", "-t", `${name}:${resolvedWindowIndex}`, "remain-on-exit"],
           { stdio: "pipe", encoding: "utf-8" },
         ).trim();
         if (value !== "on") {
@@ -974,7 +1017,7 @@ export class TmuxSession {
       this.tmuxArgs([
         "display-message",
         "-t",
-        `${this.name}:0.0`,
+        `${this.paneId}`,
         "-p",
         "#{pane_pid}",
       ]),
@@ -1021,7 +1064,7 @@ export class TmuxSession {
   paneStatus(): { dead: boolean; status: number | null } {
     try {
       const raw = execSync(
-        `${this.tmuxCommand()} display-message -t ${this.name}:0.0 -p "#{pane_dead}:#{pane_dead_status}"`,
+        `${this.tmuxCommand()} display-message -t ${this.paneId} -p "#{pane_dead}:#{pane_dead_status}"`,
         { stdio: "pipe", encoding: "utf-8" },
       ).trim();
       const [dead, status] = raw.split(":");
