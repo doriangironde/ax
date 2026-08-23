@@ -1,14 +1,14 @@
 ```
- ⠀⠀⠀⠀⠀⠀⣠⣾⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀
- ⠀⠀⠀⠀⠀⢰⣿⡿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
- ⠀⠀⠀⣠⣶⣿⣿⣷⣶⡶⣶⣶⣆⠀⠀⠀⣴⣶⣶⠆
- ⠀⠀⠀⠉⢹⣿⣿⠉⠉⠀⠘⢿⣿⣧⣀⣾⣿⡿⠃⠀             Tiny, open, embeddable, native coding agent.
- ⠀⠀⠀⠀⣼⣿⡏⠀⠀⠀⠀⠀⠻⣿⣿⣿⠟⠀⠀⠀
- ⠀⠀⠀⢀⣿⣿⠃⠀⠀⠀⠀⢠⣦⠘⢿⣿⣷⡀⠀⠀
- ⠀⠀⠀⣸⣿⡟⠀⠀⠀⠀⣰⣿⣿⠗⠀⠻⣿⣿⣄⠀
- ⠀⠀⠀⣿⣿⠇⠀⠀⠀⠾⠿⠿⠋⠀⠀⠀⠘⠿⠿⠦             ⚠ Status: Experimental. Use at your own risk.
-  ⠀⣸⣿⡿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
- ⣿⣿⣿⠟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⢠⣿⣧⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⠀⣾⡟⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
+⠀⠀⠀⠀⠀⣸⡿⠀⢻⣧⠀⠀⠀⠀⠀⠀⣴⣶⣶⠆
+⠀⠀⠀⠀⢠⣿⠃⠀⠘⣿⡜⢿⣿⣧⣀⣾⣿⡿⠃⠀             Tiny, open, embeddable, native coding agent.
+⠀⠀⠀⠀⣾⡏⠀⠀⠀⢻⣧⠀⠻⣿⣿⣿⠟⠀⠀⠀
+⠀⠀⠀⣸⡿⠀⠀⠀⠀⠘⣿⣤⣦⠘⢿⣿⣷⡀⠀⠀
+⠀⠀⢠⣿⠿⠿⠿⠿⠿⠇⣻⣿⣿⠗⠀⠻⣿⣿⣄⠀
+⠀⠀⣾⡏⠀⠀⠀⠀⠀⠾⠿⣿⡏⠀⠀⠀⠘⠿⠿⠦             ⚠ Status: Experimental. Use at your own risk.
+⠀⣸⡿⠀⠀⠀⠀⠀⠀⠀⠀⢻⣧⠀⠀⠀⠀⠀⠀⠀
+⢠⣿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠘⣿⡄⠀⠀⠀⠀⠀⠀
 ```
 
 ax is a fork of [fx](https://github.com/vercel-labs/fx), a coding agent harness and CLI written in Zig, optimized for research and embeddability as part of larger systems.

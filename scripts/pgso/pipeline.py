@@ -3,6 +3,8 @@ from __future__ import annotations
 import dataclasses
 import os
 import pathlib
+import shutil
+
 import re
 import stat
 import uuid
@@ -407,6 +409,18 @@ def build_control(
         timeout_s=900,
         log_path=paths.logs / "build-control.json",
     )
+    if not paths.control_binary.exists():
+        # Product binary renames (fx -> ax) must not break the pipeline
+        # layout; the control install emits the product-named executable
+        # while the pipeline layout is pinned to the selector name. If the
+        # expected install path is absent, adopt the single executable the
+        # install emitted (this also covers future product renames).
+        bin_dir = paths.control_prefix / "bin"
+        installed = tuple(
+            path for path in bin_dir.iterdir() if path.is_file()
+        )
+        if len(installed) == 1:
+            shutil.copy2(installed[0], paths.control_binary)
     _require_nonempty_file(paths.control_binary, "ReleaseSafe control")
     return paths.control_binary
 
