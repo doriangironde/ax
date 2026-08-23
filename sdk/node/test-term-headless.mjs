@@ -60,7 +60,7 @@ const readGrid = () => {
   return lines.join("\n");
 };
 const startupDeadline = performance.now() + 5000;
-while (!readGrid().includes("𝒇x")) {
+while (!readGrid().includes("𝒂x")) {
   await flushTerminal();
   if (performance.now() >= startupDeadline) throw new Error(`timed out waiting for fx-term startup:\n${readGrid()}`);
   await new Promise((resolve) => setTimeout(resolve, 10));
@@ -96,7 +96,7 @@ const exitCode = await Promise.race([
 ]);
 
 if (exitCode !== 0) throw new Error(`fx-term exited with code ${exitCode}`);
-if (!grid.includes("𝒇x")) throw new Error(`shared Fx welcome frame was not visible in xterm grid:\n${grid}`);
+if (!grid.includes("𝒂x")) throw new Error(`shared Fx welcome frame was not visible in xterm grid:\n${grid}`);
 if (!grid.includes("Run /help for commands")) throw new Error(`shared Fx welcome guidance was not visible in xterm grid:\n${grid}`);
 if (terminal.buffer.active.baseY !== 0 || terminal.buffer.active.viewportY !== 0) {
   throw new Error(`fresh xterm startup created blank scrollback: baseY=${terminal.buffer.active.baseY}, viewportY=${terminal.buffer.active.viewportY}`);

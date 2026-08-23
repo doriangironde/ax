@@ -239,7 +239,7 @@ async function prompt(value, expected) {
   await waitFor(() => grid().includes(expected), expected);
 }
 
-await waitFor(() => grid().includes("𝒇x"), "startup");
+await waitFor(() => grid().includes("𝒂x"), "startup");
 await prompt("workspace success", "success record checked");
 await prompt("workspace truncation", "truncation record checked");
 await prompt("workspace timeout", "timeout mapping checked");

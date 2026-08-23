@@ -76,7 +76,7 @@ async function command(text, expected) {
   await waitFor(() => grid().includes(expected), expected);
 }
 
-await waitFor(() => grid().includes("𝒇x"), "startup");
+await waitFor(() => grid().includes("𝒂x"), "startup");
 await command("first question", "first answer");
 await command("second question", "second answer");
 if (requests.length !== 2) throw new Error(`expected two gateway turns, got ${requests.length}`);

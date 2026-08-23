@@ -84,7 +84,7 @@ async function waitFor(predicate, label) {
   }
 }
 
-await waitFor(() => grid().includes("𝒇x"), "startup");
+await waitFor(() => grid().includes("𝒂x"), "startup");
 terminal.resize(112, 36);
 await waitFor(
   () => events.some((event) => event.type === "terminal.resize" && event.cols === 112 && event.rows === 36) &&
@@ -156,7 +156,7 @@ const abortRuntime = await createFxTerminal({
 const abortFlush = () => new Promise((resolve) => abortTerminal.write("", resolve));
 const abortGrid = () => terminalGrid(abortTerminal);
 const abortStartupDeadline = performance.now() + 5000;
-while (!abortGrid().includes("𝒇x")) {
+while (!abortGrid().includes("𝒂x")) {
   await abortFlush();
   if (performance.now() >= abortStartupDeadline) throw new Error(`timed out waiting for abort runtime startup:\n${abortGrid()}`);
   await new Promise((resolve) => setTimeout(resolve, 10));

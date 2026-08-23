@@ -232,7 +232,7 @@ jobs:
       - name: Run Vision route and headless SIGINT regressions
         run: |
           bun test vision-route-fake-gateway.test.ts
-          bun test ./tui-command-permissions.test.ts --test-name-pattern "fx ask SIGINT during classifier wait terminates before decision or execution"
+          bun test ./tui-command-permissions.test.ts --test-name-pattern "ax ask SIGINT during classifier wait terminates before decision or execution"
         working-directory: tests/e2e
         env:
           AI_GATEWAY_API_KEY: ""
