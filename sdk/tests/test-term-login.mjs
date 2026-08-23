@@ -258,7 +258,7 @@ if (gatewayRequests[1]?.authorization !== `Bearer ${accessToken}`) {
 
 second.runtime.write("/logout\r");
 await waitFor(
-  () => second.capture.transcript().includes("Signed out of fx."),
+  () => second.capture.transcript().includes("Signed out of ax."),
   "OAuth logout",
   () => JSON.stringify(second.capture.transcript().slice(-1500)),
 );
