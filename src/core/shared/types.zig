@@ -188,7 +188,7 @@ pub const StreamState = struct {
     /// wall-clock blink. Monotonic for the whole turn: tool boundaries never
     /// reset it.
     turn_started_ms: i64 = 0,
-    /// When fx started waiting on user input (approval or question); 0 means
+    /// When ax started waiting on user input (approval or question); 0 means
     /// not waiting. While set, the Thinking clock freezes at this instant;
     /// on resume the wait is excluded by shifting turn_started_ms forward.
     waiting_since_ms: i64 = 0,

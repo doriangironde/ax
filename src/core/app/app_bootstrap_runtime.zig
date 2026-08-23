@@ -378,7 +378,7 @@ pub fn Runtime(comptime App: type) type {
                     try app.writeDomainNotice(.{
                         .topic = "keychain",
                         .tone = .warning,
-                        .body = "fx could not access " ++ credentials.stored_key_backend_label ++ ". Continuing without an API key.",
+                        .body = "ax could not access " ++ credentials.stored_key_backend_label ++ ". Continuing without an API key.",
                     }, true);
                 }
             }

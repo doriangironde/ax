@@ -7171,7 +7171,7 @@ describe.skipIf(!tmuxAvailable())("TUI gateway stream lifecycle", () => {
       expect(readFileSync(stderrPath, "utf8")).toBe("");
 
       await session.sendKeys("C-[");
-      await session.waitForPane((pane) => pane.includes("𝒇x") && !pane.includes("Tab Provider"), TIMEOUT);
+      await session.waitForPane((pane) => pane.includes("𝒂x") && !pane.includes("Tab Provider"), TIMEOUT);
     },
     TIMEOUT,
   );

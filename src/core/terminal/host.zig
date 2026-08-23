@@ -17,7 +17,7 @@ const process_supervisor = @import("../background/process_supervisor.zig");
 
 const Allocator = std.mem.Allocator;
 
-pub const internal_mode = "--fx-internal-terminal-host";
+pub const internal_mode = "--ax-internal-terminal-host";
 pub const endpoint_name = "host.sock";
 pub const lock_name = "host.lock";
 const identity_name = "host.json";
@@ -27,7 +27,7 @@ const identity_max_bytes: usize = 1024;
 const max_connection_requests: usize = 32;
 const listener_poll_ms = 50;
 const transport_hash_bytes: usize = 16;
-const transport_hash_context = "fx.terminal.transport.v1\x00";
+const transport_hash_context = "ax.terminal.transport.v1\x00";
 const socket_permissions: std.Io.File.Permissions = switch (builtin.os.tag) {
     .macos, .linux => .fromMode(0o600),
     else => .default_file,

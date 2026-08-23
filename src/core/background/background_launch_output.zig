@@ -159,7 +159,7 @@ fn randomLogName(alloc: Allocator) ![]u8 {
     }
     return std.fmt.allocPrint(
         alloc,
-        "fx-cmd-{s}.log",
+        "ax-cmd-{s}.log",
         .{encoded[0..]},
     );
 }

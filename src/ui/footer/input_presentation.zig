@@ -1527,7 +1527,7 @@ test "compose hint row prioritizes red yolo warning with compact fallback" {
     var input = InputRuntime{};
     defer input.deinit(std.testing.allocator);
     var ctx = testRenderContext(&input);
-    ctx.danger_status = "YOLO enabled: fx permission checks disabled";
+    ctx.danger_status = "YOLO enabled: ax permission checks disabled";
     ctx.danger_status_compact = "YOLO: unrestricted";
 
     var full = try composeHintRow(std.testing.allocator, false, null, ctx, 80);
@@ -1551,7 +1551,7 @@ test "compose hint row yields the yolo warning to a pending ctrl+c quit hint" {
     var input = InputRuntime{};
     defer input.deinit(std.testing.allocator);
     var ctx = testRenderContext(&input);
-    ctx.danger_status = "YOLO enabled: fx permission checks disabled";
+    ctx.danger_status = "YOLO enabled: ax permission checks disabled";
     ctx.danger_status_compact = "YOLO: unrestricted";
     ctx.ctrl_c_pending = true;
 

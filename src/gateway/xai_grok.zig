@@ -10,7 +10,7 @@ const gateway_client = @import("client.zig");
 const Allocator = std.mem.Allocator;
 const endpoint = "https://cli-chat-proxy.grok.com/v1/responses";
 const generation_origin = "https://cli-chat-proxy.grok.com/v1";
-// The proxy gates this as Grok wire compatibility; fx identifies itself separately below.
+// The proxy gates this as Grok wire compatibility; ax identifies itself separately below.
 const proxy_compatibility_version = "1.0.6";
 const e2e_endpoint_env = "FX_E2E_XAI_GROK_RESPONSES_URL";
 const max_error_body_bytes: usize = 256 * 1024;

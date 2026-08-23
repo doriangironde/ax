@@ -2056,7 +2056,7 @@ fn requestAcpElicitation(
 
     var id_buffer: [48]u8 = undefined;
     const url_id = if (input_request.mode == .url)
-        try std.fmt.bufPrint(&id_buffer, "fx-{d}", .{outbound_id})
+        try std.fmt.bufPrint(&id_buffer, "ax-{d}", .{outbound_id})
     else
         null;
     const legacy_source_id = if (origin.wire.isLegacy() and input_request.mode == .url)
@@ -2184,12 +2184,12 @@ fn formatAcpElicitationMessage(
     return switch (request.mode) {
         .form => std.fmt.allocPrint(
             alloc,
-            "Fx received a form request from MCP server {s}. {s}",
+            "ax received a form request from MCP server {s}. {s}",
             .{ server_name, request.message },
         ),
         .url => std.fmt.allocPrint(
             alloc,
-            "Fx received a URL request from MCP server {s} for host {s}. {s}",
+            "ax received a URL request from MCP server {s} for host {s}. {s}",
             .{ server_name, request.url_host orelse "unknown", request.message },
         ),
         .unknown => error.McpInputRequired,
@@ -3067,7 +3067,7 @@ test "ACP stream adapter strips ANSI from agent chunks and suppresses writer fai
     const alloc = arena_state.allocator();
     const spans = [_][]const u8{
         "\x1b[1mbold\x1b[22m and \x1b[3mitalic\x1b[23m\n",
-        "\x1b]8;id=fx-1;https://example.com\x1b\\docs\x1b]8;;\x1b\\\n",
+        "\x1b]8;id=ax-1;https://example.com\x1b\\docs\x1b]8;;\x1b\\\n",
         "\x1b[2m\xe2\x94\x82 \x1b[22mconst x = **literal**;\n",
     };
     const expected_spans = [_][]const u8{
@@ -3397,7 +3397,7 @@ test "stripAnsiAlloc returns the original slice for clean text and strips escape
 
 test "stripAnsiAlloc converts OSC-8 hyperlinks with params and BEL terminators" {
     const alloc = std.testing.allocator;
-    const with_params = try stripAnsiAlloc(alloc, "\x1b]8;id=fx-1;https://ziglang.org/download/\x1b\\Zig downloads\x1b]8;;\x1b\\ ready");
+    const with_params = try stripAnsiAlloc(alloc, "\x1b]8;id=ax-1;https://ziglang.org/download/\x1b\\Zig downloads\x1b]8;;\x1b\\ ready");
     defer alloc.free(with_params);
     try std.testing.expectEqualStrings("[Zig downloads](https://ziglang.org/download/) ready", with_params);
 

@@ -152,7 +152,7 @@ test "skills screen places the unchanged composer above the catalog without tran
     const alloc = std.testing.allocator;
     const skills = [_]skill_runtime.Skill{
         .{ .name = "pure-core", .description = "Keep data transformations pure.", .path = "/skills/pure-core/SKILL.md", .source = .global_fx },
-        .{ .name = "fx-guide", .description = "Route Fx work to the right skill.", .path = "/skills/fx-guide/SKILL.md", .source = .global_codex },
+        .{ .name = "ax-guide", .description = "Route Fx work to the right skill.", .path = "/skills/ax-guide/SKILL.md", .source = .global_codex },
     };
     const projection: render_input.SkillsMenuProjection = .{
         .active = true,

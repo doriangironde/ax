@@ -48,7 +48,7 @@ fn store(alloc: Allocator, value: []const u8) StoreError!void {
 }
 
 /// Let the platform credential store own terminal input when it supports a
-/// secure prompt, keeping plaintext out of the fx process.
+/// secure prompt, keeping plaintext out of the ax process.
 fn storeInteractive() StoreError!bool {
     if (comptime builtin.os.tag == .macos) {
         keychain.storeInteractive() catch |err| return writeFailed("keychain_interactive", err);

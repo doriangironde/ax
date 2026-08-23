@@ -76,7 +76,7 @@ fn tmuxAbnormalExitHandler(sig: std.posix.SIG) callconv(.c) void {
 }
 
 /// Install handlers for SIGTERM and SIGHUP so an externally-terminated
-/// fx restores terminal state before dying. SIGINT is not included
+/// ax restores terminal state before dying. SIGINT is not included
 /// because raw mode disables terminal-generated SIGINT.
 pub fn installAbnormalExitHandlers(tmux: ?[]const u8) void {
     if (!shell_runtime.supports_resize_signal) return;

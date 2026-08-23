@@ -3851,7 +3851,7 @@ test "welcome logo stays pinned while middle transcript rows overflow" {
     try h.flush();
 
     try expectGridContains(&h, "Run /help for commands");
-    try expectGridContains(&h, "𝒇x v");
+    try expectGridContains(&h, "𝒂x v");
     try expectGridNotContains(&h, "content line 0");
     try expectGridContains(&h, "content line 44");
 }
@@ -3880,7 +3880,7 @@ test "welcome logo stays pinned during footer-reserved overflow" {
 
     try std.testing.expect(h.shell.last_visible_transcript_split_active);
     try std.testing.expect(h.shell.last_visible_transcript_split_suffix_start_line > h.shell.last_visible_transcript_split_prefix_lines);
-    try expectGridContains(&h, "𝒇x v");
+    try expectGridContains(&h, "𝒂x v");
     try expectGridContains(&h, "Run /help for commands");
     try expectGridNotContains(&h, "content line 0");
     try expectGridContains(&h, "content line 44");
@@ -4532,7 +4532,7 @@ test "entry-bound shimmer resolves inside pinned welcome tail selection" {
     try h.flush();
 
     const status_row = try findRowContaining(&h, "tail status line");
-    try expectGridContains(&h, "𝒇x v");
+    try expectGridContains(&h, "𝒂x v");
 
     var ctx = defaultFooterContext(&input);
     setToolActivity(&ctx, status_id, "Reading pinned tail");
@@ -4794,7 +4794,7 @@ test "clean footer frame does not spam trace on idle ticks" {
     try std.testing.expect(std.mem.find(u8, trace, "footer.clean") == null);
 }
 
-test "startup reservation scrolls to fit first paint without wiping pre-fx rows" {
+test "startup reservation scrolls to fit first paint without wiping pre-ax rows" {
     const alloc = std.testing.allocator;
     var h = try Harness.init(alloc, 80, 24, 4);
     defer h.deinit();
@@ -4819,7 +4819,7 @@ test "startup reservation scrolls to fit first paint without wiping pre-fx rows"
     try h.vt.feed("PRE17\n");
     try h.vt.feed("PRE18\n");
     try h.vt.feed("PRE19\n");
-    try h.vt.feed("$ fx");
+    try h.vt.feed("$ ax");
 
     try h.initStartupViewport(24, 11);
     try std.testing.expectEqual(@as(u16, 10), h.shell.viewport_top_row);
@@ -4835,7 +4835,7 @@ test "startup reservation scrolls to fit first paint without wiping pre-fx rows"
     try h.flush();
 
     try expectRowPrefix(&h, 1, "PRE15");
-    try expectRowPrefix(&h, 6, "$ fx");
+    try expectRowPrefix(&h, 6, "$ ax");
     try expectRowPrefix(&h, 10, "FX01");
     try expectRowPrefix(&h, 19, "FX10");
 }
@@ -5057,7 +5057,7 @@ test "empty pre-paint defers scrolling until first content frame" {
     try h.vt.feed("PRE17\n");
     try h.vt.feed("PRE18\n");
     try h.vt.feed("PRE19\n");
-    try h.vt.feed("$ fx");
+    try h.vt.feed("$ ax");
 
     try h.shell.initViewport(&h.metrics, 24);
     try h.renderTranscriptFrame();
@@ -6442,7 +6442,7 @@ test "settled resize reanchors viewport_top_row at row one" {
     try std.testing.expectEqual(@as(u16, 1), h.shell.viewport_top_row);
 }
 
-test "grow after shrink-overflow restores transcript inside fx's viewport band" {
+test "grow after shrink-overflow restores transcript inside ax's viewport band" {
     var h = try Harness.init(std.testing.allocator, 80, 30, 4);
     defer h.deinit();
 
@@ -6660,17 +6660,17 @@ test "rapid settled resizes retain the four-skill transcript" {
     );
 }
 
-test "settled resize clears pre-fx shell history and reanchors at row one" {
+test "settled resize clears pre-ax shell history and reanchors at row one" {
     var h = try Harness.init(std.testing.allocator, 40, 20, 4);
     defer h.deinit();
 
     try h.vt.feed("\x1b[1;1H");
     try h.vt.feed("$ ls\n");
     try h.vt.feed("README.md  src  tests\n");
-    try h.vt.feed("$ fx\n");
+    try h.vt.feed("$ ax\n");
 
     try h.shell.initViewport(&h.metrics, 4);
-    try h.shell.writeTranscript(h.alloc, &h.metrics, "first fx line\nsecond fx line\n", true);
+    try h.shell.writeTranscript(h.alloc, &h.metrics, "first ax line\nsecond ax line\n", true);
     try h.flush();
 
     try h.driveResize(40, 24, 4, true);
@@ -6678,14 +6678,14 @@ test "settled resize clears pre-fx shell history and reanchors at row one" {
 
     try expectGridNotContains(&h, "$ ls");
     try expectGridNotContains(&h, "README.md  src  tests");
-    try expectGridNotContains(&h, "$ fx");
+    try expectGridNotContains(&h, "$ ax");
     try std.testing.expectEqual(@as(u16, 1), h.shell.owned_top_row);
     try std.testing.expectEqual(@as(u16, 1), h.shell.viewport_top_row);
-    try expectRowPrefix(&h, 1, "first fx line");
-    try expectRowPrefix(&h, 2, "second fx line");
+    try expectRowPrefix(&h, 1, "first ax line");
+    try expectRowPrefix(&h, 2, "second ax line");
 }
 
-test "settled width resize clears pre-fx shell rows and reanchors at row one" {
+test "settled width resize clears pre-ax shell rows and reanchors at row one" {
     const alloc = std.testing.allocator;
     var h = try Harness.init(alloc, 80, 24, 4);
     defer h.deinit();
@@ -6693,10 +6693,10 @@ test "settled width resize clears pre-fx shell rows and reanchors at row one" {
     try h.vt.feed("\x1b[1;1H");
     try h.vt.feed("$ git status\n");
     try h.vt.feed("On branch feature\n");
-    try h.vt.feed("$ fx\n");
+    try h.vt.feed("$ ax\n");
 
     try h.shell.initViewport(&h.metrics, 4);
-    try h.shell.writeTranscript(alloc, &h.metrics, "first fx line\nsecond fx line\n", true);
+    try h.shell.writeTranscript(alloc, &h.metrics, "first ax line\nsecond ax line\n", true);
     try h.flush();
 
     const before = try h.file.length(io_mod.getIo());
@@ -6706,7 +6706,7 @@ test "settled width resize clears pre-fx shell rows and reanchors at row one" {
 
     try expectGridNotContains(&h, "$ git status");
     try expectGridNotContains(&h, "On branch feature");
-    try expectGridNotContains(&h, "$ fx");
+    try expectGridNotContains(&h, "$ ax");
     try std.testing.expectEqual(@as(u16, 1), h.shell.owned_top_row);
     try std.testing.expectEqual(@as(u16, 1), h.shell.viewport_top_row);
     try std.testing.expect(std.mem.find(u8, emitted, "\x1b[3J") != null);
@@ -6875,7 +6875,7 @@ test "large tabbed user turn keeps frame scroll plan aligned" {
     try std.testing.expectEqual(@as(usize, 21), std.mem.count(u8, raw_prompt, "\t"));
 
     try h.shell.initViewport(&h.metrics, 12);
-    try h.shell.writeTranscript(alloc, &h.metrics, "What would you like fx to do?\n", true);
+    try h.shell.writeTranscript(alloc, &h.metrics, "What would you like ax to do?\n", true);
     h.frame_redraw = true;
     try renderTestFooter(&h, &input, &approval, &h.frame_redraw);
     try h.flush();
@@ -7038,7 +7038,7 @@ test "settled resize with rows-only change resets terminal scrollback" {
     try std.testing.expect(std.mem.find(u8, emitted, "\x1b[3J") != null);
 }
 
-test "theme reset retints fx entries and replays the retained transcript once" {
+test "theme reset retints ax entries and replays the retained transcript once" {
     const alloc = std.testing.allocator;
     var h = try Harness.init(alloc, 80, 24, 4);
     defer h.deinit();

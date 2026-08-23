@@ -111,7 +111,7 @@ fn executeCommand(alloc: Allocator, command: Command, request: CommandRequest) !
         .path => noticeFmt(
             alloc,
             "fx workspace roots are auto-discovered from .fx/skills and skills/.\n" ++
-                "fx managed install root: {s}\n" ++
+                "ax managed install root: {s}\n" ++
                 "compatibility roots are auto-discovered from workspace and home (.opencode/.codex/.claude/.agents/.claw).",
             .{request.skills_dir},
             false,
@@ -159,7 +159,7 @@ fn removeCommandResult(alloc: Allocator, request: CommandRequest, name: []const 
     };
 
     if (!skill.managed_install) {
-        return noticeFmt(alloc, "Skill '{s}' comes from {s}, not the fx managed install root. Remove it from {s}.", .{ name, skill.source_label, skill.path }, false);
+        return noticeFmt(alloc, "Skill '{s}' comes from {s}, not the ax managed install root. Remove it from {s}.", .{ name, skill.source_label, skill.path }, false);
     }
 
     removeSkill(request.skills_dir, std.fs.path.basename(skill.path)) catch {
@@ -1957,7 +1957,7 @@ test "built-in skills path reports native workspace roots" {
     switch (result) {
         .notice => |notice| try std.testing.expectEqualStrings(
             "fx workspace roots are auto-discovered from .fx/skills and skills/.\n" ++
-                "fx managed install root: /tmp/skills\n" ++
+                "ax managed install root: /tmp/skills\n" ++
                 "compatibility roots are auto-discovered from workspace and home (.opencode/.codex/.claude/.agents/.claw).",
             notice.text,
         ),
@@ -2183,7 +2183,7 @@ test "built-in skills command refuses to remove compatibility roots" {
 
     switch (result) {
         .notice => |notice| {
-            try std.testing.expect(std.mem.find(u8, notice.text, "not the fx managed install root") != null);
+            try std.testing.expect(std.mem.find(u8, notice.text, "not the ax managed install root") != null);
             try std.testing.expect(!notice.reload);
         },
         else => return error.TestExpectedEqual,

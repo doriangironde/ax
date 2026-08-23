@@ -191,18 +191,18 @@ pub fn catalogAccessForCredentialAndAccount(
 pub const stored_key_backend_label = if (builtin.os.tag == .macos) "macOS Keychain" else "profile file";
 
 /// Both modes resolve the same source set; the mode selects only whether an expired
-/// fx login session is refreshed first.
+/// ax login session is refreshed first.
 pub const LoadMode = enum { stored, refresh_if_needed };
 
 const FxLoginRefreshMode = enum { if_needed, force };
 
-pub const missing_credential_message = "Fx needs access to Vercel AI Gateway. Run fx login to sign in, fx setup to use an API key, or set AI_GATEWAY_API_KEY.";
-pub const missing_interactive_credential_message = "Fx needs access to Vercel AI Gateway. Run /login to sign in, /setup to use an API key, or set AI_GATEWAY_API_KEY.";
-pub const missing_chatgpt_credential_message = "fx needs a Codex subscription login for this model. Run fx login codex.";
+pub const missing_credential_message = "ax needs access to Vercel AI Gateway. Run ax login to sign in, ax setup to use an API key, or set AI_GATEWAY_API_KEY.";
+pub const missing_interactive_credential_message = "ax needs access to Vercel AI Gateway. Run /login to sign in, /setup to use an API key, or set AI_GATEWAY_API_KEY.";
+pub const missing_chatgpt_credential_message = "ax needs a Codex subscription login for this model. Run ax login codex.";
 pub const missing_chatgpt_interactive_credential_message = "Codex needs a subscription login. Run /login and choose Sign in with Codex.";
-pub const missing_grok_credential_message = "fx needs a Grok subscription login for this model. Run fx login grok.";
+pub const missing_grok_credential_message = "ax needs a Grok subscription login for this model. Run ax login grok.";
 pub const missing_grok_interactive_credential_message = "Grok needs a subscription login. Run /login and choose Sign in with Grok.";
-pub const unreadable_store_message = "Fx could not read the stored API key from " ++ stored_key_backend_label ++ ". A key may be saved but unreadable. Set FX_TRACE_LOG for the failing step, or set AI_GATEWAY_API_KEY.";
+pub const unreadable_store_message = "ax could not read the stored API key from " ++ stored_key_backend_label ++ ". A key may be saved but unreadable. Set FX_TRACE_LOG for the failing step, or set AI_GATEWAY_API_KEY.";
 
 pub const Credential = struct {
     token: []u8,
@@ -241,8 +241,8 @@ pub const StoredKeyReadStatus = enum {
     unavailable,
 };
 
-/// Why the fx login produced no credential. Only meaningful once resolution has
-/// reached the fx-login step and it stayed silent. `unavailable` means the
+/// Why the ax login produced no credential. Only meaningful once resolution has
+/// reached the ax-login step and it stayed silent. `unavailable` means the
 /// session could not be loaded or its refresh failed, which is different from
 /// having no session at all: the login exists and may still be repairable.
 pub const FxLoginReadStatus = enum {
@@ -336,7 +336,7 @@ pub fn resolvePreferring(
     const fx_login = loadFxLoginForPrecedence(alloc, transport, mode) catch |err| blk: {
         if (err == error.OutOfMemory) return err;
         fx_login_status = .unavailable;
-        debug_trace.logf("auth", "fx login load failed mode={t} err={s}; using precedence", .{ mode, @errorName(err) });
+        debug_trace.logf("auth", "ax login load failed mode={t} err={s}; using precedence", .{ mode, @errorName(err) });
         break :blk null;
     };
     if (fx_login) |credential| return .{ .credential = credential };
@@ -365,7 +365,7 @@ fn loadFxLoginForPrecedence(
     };
 }
 
-/// `loadSource` always refreshes an expired fx login, which `.stored` mode
+/// `loadSource` always refreshes an expired ax login, which `.stored` mode
 /// forbids: a diagnostic must not rewrite the session file or make an OAuth
 /// request. Honour the mode for the preferred source too.
 fn loadPreferredSource(
@@ -652,7 +652,7 @@ pub fn sourceLabel(source: Source) []const u8 {
     return switch (source) {
         .vercel_oidc_token => "VERCEL_OIDC_TOKEN",
         .ai_gateway_api_key => "AI_GATEWAY_API_KEY",
-        .fx_login => "fx login",
+        .fx_login => "ax login",
         .stored_key => "stored API key (" ++ stored_key_backend_label ++ ")",
         .chatgpt_subscription => "Codex subscription",
         .grok_subscription => "Grok subscription",
@@ -672,8 +672,8 @@ test "stored key label discloses the backend that answered" {
 }
 
 test "missing credential messages use surface commands in preferred order" {
-    const cli_login = std.mem.find(u8, missing_credential_message, "fx login").?;
-    const cli_setup = std.mem.find(u8, missing_credential_message, "fx setup").?;
+    const cli_login = std.mem.find(u8, missing_credential_message, "ax login").?;
+    const cli_setup = std.mem.find(u8, missing_credential_message, "ax setup").?;
     const cli_env = std.mem.find(u8, missing_credential_message, "AI_GATEWAY_API_KEY").?;
 
     try std.testing.expect(cli_login < cli_setup);
@@ -737,7 +737,7 @@ test "catalog access isolates public and authenticated provider credentials" {
     try std.testing.expect(rejected.teamContext() == null);
 }
 
-test "selected fx login authorizes its team model catalog" {
+test "selected ax login authorizes its team model catalog" {
     var login = Credential{
         .token = try std.testing.allocator.dupe(u8, "login-token"),
         .source = .fx_login,
@@ -752,7 +752,7 @@ test "selected fx login authorizes its team model catalog" {
     try std.testing.expectEqualStrings("team_123", access.teamContext().?);
 }
 
-test "fx login catalog access requires a fresh credential and selected team" {
+test "ax login catalog access requires a fresh credential and selected team" {
     var login = Credential{
         .token = try std.testing.allocator.dupe(u8, "login-token"),
         .source = .fx_login,
@@ -936,7 +936,7 @@ test "a remembered choice outranks the environment" {
     try std.testing.expectEqualStrings("api-key", credential.token);
 }
 
-test "a remembered fx login never refreshes in stored mode" {
+test "a remembered ax login never refreshes in stored mode" {
     const alloc = std.testing.allocator;
     const env = try CredentialTestEnv.install(alloc, &.{});
     defer env.deinit();
@@ -1037,7 +1037,7 @@ test "credential resolution preserves unreadable store classification" {
     try std.testing.expectEqual(StoredKeyReadStatus.unavailable, resolution.stored_key_status);
 }
 
-test "a failed fx-login refresh falls through to the stored key" {
+test "a failed ax-login refresh falls through to the stored key" {
     const alloc = std.testing.allocator;
     var fixture = try ExpiredFxLoginFixture.install(alloc);
     defer fixture.deinit();
@@ -1059,7 +1059,7 @@ test "a failed fx-login refresh falls through to the stored key" {
     try std.testing.expectEqual(@as(usize, 1), store_fixture.load_calls);
 }
 
-test "a failed fx-login refresh is still reported when nothing else resolves" {
+test "a failed ax-login refresh is still reported when nothing else resolves" {
     const alloc = std.testing.allocator;
     var fixture = try ExpiredFxLoginFixture.install(alloc);
     defer fixture.deinit();
@@ -1080,7 +1080,7 @@ test "a failed fx-login refresh is still reported when nothing else resolves" {
     try std.testing.expectEqual(StoredKeyReadStatus.not_found, resolution.stored_key_status);
 }
 
-/// A HOME holding an fx login whose session is expired and whose refresh token
+/// A HOME holding an ax login whose session is expired and whose refresh token
 /// the issuer rejects, which is what an expired or revoked login looks like on
 /// disk. Paired with `oauth_transport.unavailable_provider`, the refresh fails.
 const ExpiredFxLoginFixture = struct {
@@ -1122,7 +1122,7 @@ const ExpiredFxLoginFixture = struct {
     }
 };
 
-test "a disabled store still reports why the fx login was silent" {
+test "a disabled store still reports why the ax login was silent" {
     const alloc = std.testing.allocator;
     var fixture = try ExpiredFxLoginFixture.install(alloc);
     defer fixture.deinit();

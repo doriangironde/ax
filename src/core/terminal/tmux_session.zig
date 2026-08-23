@@ -11,8 +11,8 @@ const background_process_provider = @import(
 
 const Allocator = std.mem.Allocator;
 
-pub const launcher_mode = "--fx-internal-terminal-tmux-launcher";
-pub const capture_mode = "--fx-internal-terminal-tmux-capture";
+pub const launcher_mode = "--ax-internal-terminal-tmux-launcher";
+pub const capture_mode = "--ax-internal-terminal-tmux-capture";
 
 const namespace_option = "@fx_terminal_namespace";
 const namespace_value = "1";
@@ -161,7 +161,7 @@ pub const Paths = struct {
         }
         const session_name = try std.fmt.allocPrint(
             alloc,
-            "fx-{s}",
+            "ax-{s}",
             .{backend_identity},
         );
         errdefer alloc.free(session_name);
@@ -668,7 +668,7 @@ pub const Backend = struct {
     pub fn write(self: *Backend, bytes: []const u8, paste: bool) !void {
         const buffer_name = try std.fmt.allocPrint(
             self.alloc,
-            "fx-{s}",
+            "ax-{s}",
             .{self.backend_identity},
         );
         defer self.alloc.free(buffer_name);

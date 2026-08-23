@@ -445,7 +445,7 @@ fn recoveryActionForSessionDiagnostic(
         .authority_transition_pending,
         .commit_intent_pending,
         .cleanup_candidate,
-        => "rerun fx doctor after active writers exit; cleanup is guarded",
+        => "rerun ax doctor after active writers exit; cleanup is guarded",
 
         .canonical_log_large,
         .canonical_log_compaction_overdue,
@@ -466,7 +466,7 @@ fn recoveryActionForSessionDiagnostic(
         .commit_watermark_mismatched,
         => std.fmt.bufPrint(
             buffer,
-            "run fx session recover {s}; it creates a separate resumable copy and leaves the source unchanged",
+            "run ax session recover {s}; it creates a separate resumable copy and leaves the source unchanged",
             .{session_id},
         ),
 
@@ -853,7 +853,7 @@ test "session doctor renders precise watermark and compaction diagnostics" {
     try std.testing.expect(std.mem.find(
         u8,
         checks.items[0].detail,
-        "fx session recover missing-watermark",
+        "ax session recover missing-watermark",
     ) != null);
     try std.testing.expectEqual(CheckStatus.warn, checks.items[1].status);
     try std.testing.expect(std.mem.find(

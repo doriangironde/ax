@@ -27,8 +27,8 @@ fn embeddedChime(cue: Cue) []const u8 {
 
 fn materializedName(cue: Cue) []const u8 {
     return switch (cue) {
-        .click => "fx-click.caf",
-        inline else => |named_cue| "fx-" ++ @tagName(named_cue) ++ ".m4a",
+        .click => "ax-click.caf",
+        inline else => |named_cue| "ax-" ++ @tagName(named_cue) ++ ".m4a",
     };
 }
 

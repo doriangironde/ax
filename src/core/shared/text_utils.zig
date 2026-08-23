@@ -510,8 +510,8 @@ pub fn sanitizeAssistantText(text: []const u8) []const u8 {
     const first_break = std.mem.findScalar(u8, trimmed, '\n') orelse return trimmed;
     const first_line = std.mem.trim(u8, trimmed[0..first_break], " \r\n\t");
 
-    const is_intro = containsIgnoreCase(first_line, "i'm fx") or
-        containsIgnoreCase(first_line, "i am fx") or
+    const is_intro = containsIgnoreCase(first_line, "i'm ax") or
+        containsIgnoreCase(first_line, "i am ax") or
         containsIgnoreCase(first_line, "local coding assistant");
     if (!is_intro) return trimmed;
 

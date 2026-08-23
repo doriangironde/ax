@@ -180,7 +180,7 @@ pub const TurnPermissionRecovery = struct {
 
 pub fn permissionActionId(call: ToolCall) PermissionActionId {
     var hash = std.crypto.hash.sha2.Sha256.init(.{});
-    hash.update("fx.permission-action.v1\x00");
+    hash.update("ax.permission-action.v1\x00");
     hash.update(call.name);
     hash.update("\x00");
     hash.update(call.arguments_json);
@@ -191,7 +191,7 @@ fn permissionRequestId(sequence: u64) PermissionActionId {
     var buffer: [64]u8 = undefined;
     const rendered = std.fmt.bufPrint(
         &buffer,
-        "fx.permission-request.v1:{d}",
+        "ax.permission-request.v1:{d}",
         .{sequence},
     ) catch unreachable;
     var id: PermissionActionId = undefined;

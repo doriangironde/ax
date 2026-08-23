@@ -23,7 +23,7 @@ const workspace_pathing = @import("../workspace/pathing.zig");
 
 const Allocator = std.mem.Allocator;
 
-const launcher_mode = "--fx-internal-terminal-launcher";
+const launcher_mode = "--ax-internal-terminal-launcher";
 const control_mode = "--fx-internal-terminal-control";
 
 const max_sessions: usize = 16;

@@ -1953,7 +1953,7 @@ const test_tool_registry = tool_dispatch.Registry{ .tools = &.{
 } };
 
 fn matchesTestRunCommandCompatibility(command: []const u8) bool {
-    return std.mem.startsWith(u8, command, "fx-compatibility-probe");
+    return std.mem.startsWith(u8, command, "ax-compatibility-probe");
 }
 
 fn executeTestRunCommandCompatibility(
@@ -3260,7 +3260,7 @@ test "captured command compatibility bypasses compound commands" {
     const arena = arena_state.allocator();
 
     try std.testing.expect((try tool_dispatch.dispatchRunCommandCompatibility(typedDispatchContext(rt.context(), arena), rt.tool_registry, .{
-        .command = "fx-compatibility-probe; printf shell-fallback",
+        .command = "ax-compatibility-probe; printf shell-fallback",
         .resolved_cwd = "/tmp",
         .environment = .legacy,
     })) == null);
@@ -3273,7 +3273,7 @@ test "captured command compatibility bypasses compound commands" {
             typedDispatchContext(rt.context(), arena),
             rt.tool_registry,
             .{
-                .command = "fx-compatibility-probe",
+                .command = "ax-compatibility-probe",
                 .resolved_cwd = "/tmp",
                 .environment = environment,
             },
@@ -3294,7 +3294,7 @@ test "run command compatibility returns installer failure without shell fallback
         typedDispatchContext(rt.context(), arena_state.allocator()),
         rt.tool_registry,
         .{
-            .command = "fx-compatibility-probe",
+            .command = "ax-compatibility-probe",
             .resolved_cwd = "/tmp",
             .environment = .legacy,
         },
@@ -4583,7 +4583,7 @@ test "non-web_fetch tool-call metrics retain bounded args and result" {
     diagnostics.recordToolCallResult(.{
         .name = "read_file",
         .arguments_json = "{\"path\":\"README.md\"}",
-        .model_output = "<path>README.md</path>\n<content>\n# fx\nnormal result\n</content>",
+        .model_output = "<path>README.md</path>\n<content>\n# ax\nnormal result\n</content>",
         .ok = true,
         .started_at_ms = 1000,
     });
@@ -4593,7 +4593,7 @@ test "non-web_fetch tool-call metrics retain bounded args and result" {
     try std.testing.expectEqual(@as(usize, 1), n);
     try std.testing.expectEqualStrings("read_file", buf[0].name());
     try expectContains(buf[0].args(), "README.md");
-    try expectContains(buf[0].result(), "# fx");
+    try expectContains(buf[0].result(), "# ax");
     try expectContains(buf[0].result(), "normal result");
 }
 
@@ -4619,7 +4619,7 @@ test "request tool permission keeps safe defaults while local writes bypass revi
     try std.testing.expectEqual(ToolPermissionDecision.once, (try tool_admission.requestPermissionOutcome(rt.context().admissionInput(), arena, .{
         .id = "1",
         .name = "write_file",
-        .arguments_json = "{\"path\":\"fx-permission-test.txt\",\"content\":\"hello\"}",
+        .arguments_json = "{\"path\":\"ax-permission-test.txt\",\"content\":\"hello\"}",
     }, .auto, &.{})).decision);
 
     try std.testing.expectEqual(ToolPermissionDecision.once, (try tool_admission.requestPermissionOutcome(rt.context().admissionInput(), arena, .{
@@ -7613,7 +7613,7 @@ test "install_skill explicit tool installs local skill source" {
     var arena_state = std.heap.ArenaAllocator.init(alloc);
     defer arena_state.deinit();
     const result = try executeToolCall(rt.context(), arena_state.allocator(), .{ .id = "1", .name = "install_skill", .arguments_json = args_json });
-    try expectContains(result.model_output, "Installed 1 skill(s) into fx.");
+    try expectContains(result.model_output, "Installed 1 skill(s) into ax.");
     try expectContains(result.model_output, "- workflow&quot;&lt;injected&gt;\n");
     try expectNotContains(result.model_output, "<skill");
     try expectNotContains(result.model_output, "BODY SENTINEL");

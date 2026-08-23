@@ -257,7 +257,7 @@ pub const FrameSurface = struct {
     }
 
     /// Feed ANSI bytes with DECAWM disabled. Footer rows are painted as
-    /// terminal lines, and fx keeps autowrap disabled session-wide.
+    /// terminal lines, and ax keeps autowrap disabled session-wide.
     pub fn writeAnsiBandNoWrap(
         self: *FrameSurface,
         start_row: u16,
@@ -346,7 +346,7 @@ pub const FrameSurface = struct {
         return target;
     }
 
-    /// Removes fx-owned color, emphasis, and hyperlink presentation while
+    /// Removes ax-owned color, emphasis, and hyperlink presentation while
     /// preserving glyphs, geometry, ownership, and shell-owned cells.
     pub fn neutralizeFxOwnedPresentation(self: *FrameSurface) void {
         for (self.cells) |*cell| {
@@ -698,7 +698,7 @@ test "frame surface presentation neutralization preserves shell cells and Fx geo
     _ = try surface.writeAnsiBand(
         2,
         1,
-        "\x1b[1;32mF\x1b]8;;https://fx.example\x1b\\X\x1b]8;;\x1b\\\x1b[0m",
+        "\x1b[1;32mF\x1b]8;;https://ax.example\x1b\\X\x1b]8;;\x1b\\\x1b[0m",
         .transcript,
         .same_owner,
     );

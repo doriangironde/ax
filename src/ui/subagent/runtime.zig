@@ -705,7 +705,7 @@ fn approvalRouteForCard(
 
 fn mainApprovalPromptId(child_id: []const u8, approval_id: []const u8) u64 {
     var hash = std.crypto.hash.sha2.Sha256.init(.{});
-    hash.update("fx.subagent.main-approval.v1\x00");
+    hash.update("ax.subagent.main-approval.v1\x00");
     hash.update(child_id);
     hash.update("\x00");
     hash.update(approval_id);

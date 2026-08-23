@@ -12,7 +12,7 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-export const FX_BIN = resolve(import.meta.dirname, "../../zig-out/bin/fx");
+export const FX_BIN = resolve(import.meta.dirname, "../../zig-out/bin/ax");
 export const REPO_ROOT = resolve(import.meta.dirname, "../..");
 
 export const EVAL_MODELS = [
@@ -177,7 +177,7 @@ export async function runEval(
 
     if (!existsSync(FX_BIN)) {
       throw new Error(
-        `fx binary not found at ${FX_BIN}. Run 'zig build' first.`,
+        `ax binary not found at ${FX_BIN}. Run 'zig build' first.`,
       );
     }
 

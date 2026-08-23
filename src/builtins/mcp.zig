@@ -121,7 +121,7 @@ fn handleCommand(alloc: Allocator, rest: []const u8, command_request: CommandReq
         return switch (authentication) {
             .started => lineParts(
                 alloc,
-                &.{ "Waiting for MCP authentication for '", name, "'. You can continue using fx while the browser flow completes." },
+                &.{ "Waiting for MCP authentication for '", name, "'. You can continue using ax while the browser flow completes." },
                 false,
             ),
             .busy => lineParts(
@@ -1858,7 +1858,7 @@ test "MCP auth requires explicit browser confirmation and logout stays non-secre
     defer started.deinit(alloc);
     try expectLine(
         started,
-        "Waiting for MCP authentication for 'remote'. You can continue using fx while the browser flow completes.",
+        "Waiting for MCP authentication for 'remote'. You can continue using ax while the browser flow completes.",
         false,
     );
     try std.testing.expectEqual(@as(usize, 2), fixture.validation_calls);
@@ -2061,7 +2061,7 @@ test "loadConfigFromJson preserves HTTP identity headers and timeouts" {
 test "remote config keeps credential references and OAuth policy without secrets" {
     const alloc = std.testing.allocator;
     const json =
-        \\{"mcp":{"api":{"type":"http","url":"https://api.example.com/mcp","header_env":{"X-Workspace":"MCP_WORKSPACE"},"bearer_token_env":"MCP_TOKEN","oauth":{"resource":"https://api.example.com/mcp","issuer":"https://login.example.com","client_id":"fx-client","client_secret_env":"MCP_CLIENT_SECRET","client_metadata_url":"https://client.example/fx.json","scopes":["tools.read","tools.call"]}}}}
+        \\{"mcp":{"api":{"type":"http","url":"https://api.example.com/mcp","header_env":{"X-Workspace":"MCP_WORKSPACE"},"bearer_token_env":"MCP_TOKEN","oauth":{"resource":"https://api.example.com/mcp","issuer":"https://login.example.com","client_id":"ax-client","client_secret_env":"MCP_CLIENT_SECRET","client_metadata_url":"https://client.example/ax.json","scopes":["tools.read","tools.call"]}}}}
     ;
     var configs = try loadConfigFromJson(alloc, json);
     defer freeConfigs(alloc, &configs);
@@ -2078,14 +2078,14 @@ test "remote config keeps credential references and OAuth policy without secrets
         auth.resource.?,
     );
     try std.testing.expectEqualStrings("https://login.example.com", auth.issuer.?);
-    try std.testing.expectEqualStrings("fx-client", auth.client_id.?);
+    try std.testing.expectEqualStrings("ax-client", auth.client_id.?);
     try std.testing.expectEqualStrings("MCP_CLIENT_SECRET", auth.client_secret_env.?);
     try std.testing.expectEqual(@as(usize, 2), auth.scopes.len);
 }
 
 test "profile config rejects a mixed set containing invalid client metadata URLs" {
     const json =
-        \\{"mcp":{"loopback":{"type":"http","url":"https://api.example.com/mcp","oauth":{"client_metadata_url":"http://127.0.0.1:4321/client.json"}},"pathless":{"type":"http","url":"https://api.example.com/mcp","oauth":{"client_metadata_url":"https://client.example"}},"root":{"type":"http","url":"https://api.example.com/mcp","oauth":{"client_metadata_url":"https://client.example/"}},"valid":{"type":"http","url":"https://api.example.com/mcp","oauth":{"client_metadata_url":"https://client.example/fx.json"}}}}
+        \\{"mcp":{"loopback":{"type":"http","url":"https://api.example.com/mcp","oauth":{"client_metadata_url":"http://127.0.0.1:4321/client.json"}},"pathless":{"type":"http","url":"https://api.example.com/mcp","oauth":{"client_metadata_url":"https://client.example"}},"root":{"type":"http","url":"https://api.example.com/mcp","oauth":{"client_metadata_url":"https://client.example/"}},"valid":{"type":"http","url":"https://api.example.com/mcp","oauth":{"client_metadata_url":"https://client.example/ax.json"}}}}
     ;
     try std.testing.expectError(
         error.McpConfigInvalidOAuth,

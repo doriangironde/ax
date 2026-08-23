@@ -1141,7 +1141,7 @@ test "schema v2 roundtrip preserves stable identity token and managed log author
         .cwd = try alloc.dupe(u8, "/tmp/fx"),
         .log_path = try alloc.dupe(u8, "/tmp/fx.log"),
         .log_storage = .{ .managed_session = .{
-            .managed_log_name = try alloc.dupe(u8, "fx-cmd-test.log"),
+            .managed_log_name = try alloc.dupe(u8, "ax-cmd-test.log"),
         } },
         .expect_url = true,
         .started_at_ms = 100,
@@ -1158,7 +1158,7 @@ test "schema v2 roundtrip preserves stable identity token and managed log author
     try std.testing.expectEqualStrings(record.process_token.?, loaded.process_token.?);
     switch (loaded.log_storage.?) {
         .managed_session => |managed| try std.testing.expectEqualStrings(
-            "fx-cmd-test.log",
+            "ax-cmd-test.log",
             managed.managed_log_name,
         ),
         .external => return error.ExpectedManagedSessionStorage,

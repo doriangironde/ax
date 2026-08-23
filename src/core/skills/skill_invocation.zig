@@ -1840,7 +1840,7 @@ test "skill invocation preserves strict discovery diagnostics without a profile 
 
     const canonical_tmp = try io_mod.realpathAlloc(alloc, "/tmp");
     defer alloc.free(canonical_tmp);
-    const workspace_root = try std.fs.path.join(alloc, &.{ canonical_tmp, "fx-skill-tool-strict-workspace" });
+    const workspace_root = try std.fs.path.join(alloc, &.{ canonical_tmp, "ax-skill-tool-strict-workspace" });
     defer alloc.free(workspace_root);
     const skills_dir = try io_mod.dirRealpathAlloc(alloc, tmp.dir, "custom-skills");
     defer alloc.free(skills_dir);

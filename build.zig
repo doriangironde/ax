@@ -50,7 +50,7 @@ pub fn build(b: *std.Build) void {
     build_options.addOption(WasmSurface, "wasm_surface", .none);
 
     const exe = b.addExecutable(.{
-        .name = "fx",
+        .name = "ax",
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/main.zig"),
             .target = target,
@@ -84,7 +84,7 @@ pub fn build(b: *std.Build) void {
     run_exe_tests.step.dependOn(b.getInstallStep());
     run_exe_tests.setEnvironmentVariable(
         "FX_TEST_PRODUCT_EXE",
-        b.getInstallPath(.bin, "fx"),
+        b.getInstallPath(.bin, "ax"),
     );
 
     const test_step = b.step("test", "Run tests");

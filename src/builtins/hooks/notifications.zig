@@ -124,12 +124,12 @@ fn Runtime(comptime App: type) type {
                 .emit = emitInteractiveBell,
             });
             try app.lifecycle_runtime.registerPostTurnEnd(.{
-                .name = "fx.sound.turn_end",
+                .name = "ax.sound.turn_end",
                 .ctx = app,
                 .run = postTurnEndHandler,
             });
             try app.lifecycle_runtime.registerAttentionRequired(.{
-                .name = "fx.sound.attention_required",
+                .name = "ax.sound.attention_required",
                 .ctx = app,
                 .run = attentionRequiredHandler,
             });

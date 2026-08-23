@@ -939,8 +939,8 @@ fn assert_frozen_ansi_span_fixture() !void {
 
     const expected_spans = [_][]const u8{
         "\x1b[1mbold\x1b[22m and \x1b[3mitalic\x1b[23m\n",
-        "\x1b]8;id=fx-1;https://example.com\x1b\\\x1b[4mdocs\x1b[24m\x1b]8;;\x1b\\\n",
-        "\x1b]8;id=fx-2;https://example.com/docs\x1b\\\x1b[4mhttps://example.com/docs\x1b[24m\x1b]8;;\x1b\\,\n",
+        "\x1b]8;id=ax-1;https://example.com\x1b\\\x1b[4mdocs\x1b[24m\x1b]8;;\x1b\\\n",
+        "\x1b]8;id=ax-2;https://example.com/docs\x1b\\\x1b[4mhttps://example.com/docs\x1b[24m\x1b]8;;\x1b\\,\n",
         oversized_line,
         "\x1b[2m\xe2\x94\x82 \x1b[22mconst x = **literal**;\n",
         "\x1b[1mName\x1b[22m \xe2\x94\x82 \x1b[1mAge\x1b[22m\n" ++

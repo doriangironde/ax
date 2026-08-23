@@ -15,7 +15,7 @@ pub fn operationIdAlloc(alloc: Allocator, invocation_id: []const u8) ![]u8 {
     return alloc.dupe(u8, invocation_id);
 }
 
-/// Binds an untrusted invocation identifier to fx-owned issuance metadata.
+/// Binds an untrusted invocation identifier to ax-owned issuance metadata.
 /// Only the digest of the provider/UI identifier is retained in the durable
 /// operation identity.
 pub fn boundOperationIdAlloc(

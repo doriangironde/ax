@@ -497,7 +497,7 @@ fn lifecycleTerminalLine(
     const cancelled = kind == .cancelled;
     const text_style = if (cancelled) ui_render.hint_style else "";
     const text_reset = if (cancelled) ui_render.reset_style else "";
-    const follow_up = if (cancelled) " · What can fx do differently?" else "";
+    const follow_up = if (cancelled) " · What can ax do differently?" else "";
     const normalized = if (has_marker)
         try std.fmt.allocPrint(
             alloc,
@@ -4057,28 +4057,28 @@ pub const TranscriptRuntime = struct {
     layout: Layout = undefined,
     cursor_row: u16 = 1,
     cursor_col: u16 = 1,
-    /// Top terminal row owned by fx. Rows above this contain pre-fx scrollback
-    /// and must not be touched by fx repaint logic.
+    /// Top terminal row owned by ax. Rows above this contain pre-ax scrollback
+    /// and must not be touched by ax repaint logic.
     /// Initialized to the cursor row captured at `initViewport`, and
     /// decreased as the transcript scrolls until it reaches row 1.
     viewport_top_row: u16 = 1,
-    /// First row fx is allowed to clear or repaint. This is set after
-    /// launch-time reservation has created fx-owned rows. Rows above it
-    /// belong to pre-fx terminal content and must not be touched by
+    /// First row ax is allowed to clear or repaint. This is set after
+    /// launch-time reservation has created ax-owned rows. Rows above it
+    /// belong to pre-ax terminal content and must not be touched by
     /// resize/layout repair.
     owned_top_row: u16 = 1,
     /// Set when a resize leaves no drawable rows below `owned_top_row`.
     /// The next successful repaint uses natural terminal scroll to
     /// compact older visible rows into scrollback before drawing the
-    /// latest fx frame.
+    /// latest ax frame.
     pending_scroll_compact: bool = false,
-    /// Minimum body rows fx should keep available for the visible
+    /// Minimum body rows ax should keep available for the visible
     /// viewport. Startup sets this to the welcome banner height so a
     /// later resize cannot leave the renderer with a partial banner
     /// band and stale resize-reflow cells above it.
     min_visible_viewport_rows: u16 = 0,
     /// Resize-only guard rows to clear above `viewport_top_row` on the
-    /// next replay. Real terminals can reflow old fx cells just above
+    /// next replay. Real terminals can reflow old ax cells just above
     /// the logical band during a drag; this lets the settled pass erase
     /// that residue without widening normal streaming paints.
     reflow_clear_guard_rows: u16 = 0,
@@ -4168,8 +4168,8 @@ pub const TranscriptRuntime = struct {
     /// frame on its own.
     transcript_band_dirty: bool = false,
     /// False until the first non-empty viewport paint has established
-    /// fx's transcript band. Before that point transcript writes are
-    /// model updates only: emitting scroll newlines would move pre-fx
+    /// ax's transcript band. Before that point transcript writes are
+    /// model updates only: emitting scroll newlines would move pre-ax
     /// shell rows before the renderer has had a chance to respect
     /// `viewport_top_row`.
     has_painted_transcript: bool = false,
@@ -10156,7 +10156,7 @@ test "resume view snapshot omits a visible leading welcome entry" {
     try runtime.writeTranscriptClassified(
         alloc,
         &metrics,
-        "fx · Run /help for commands\n\n",
+        "ax · Run /help for commands\n\n",
         true,
         .welcome,
     );

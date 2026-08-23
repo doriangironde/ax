@@ -10647,7 +10647,7 @@ test "route recovery question submit does not write agent question transcript" {
         .{ .label = "Try again later", .description = null },
     };
     const entries = [_]types.QuestionBatchEntry{
-        .{ .question = "Route failed after 3 attempts. What should fx do?", .options = &opts },
+        .{ .question = "Route failed after 3 attempts. What should ax do?", .options = &opts },
     };
     try app.question_prompt.syncFrom(alloc, &entries);
     try std.testing.expectEqual(
@@ -10663,7 +10663,7 @@ test "route recovery question submit does not write agent question transcript" {
         app.worker.submitted_question_answers[0][0..app.worker.submitted_question_answer_lens[0]],
     );
     try std.testing.expect(!app.question_prompt.isActive());
-    try std.testing.expectEqual(@as(usize, 0), countOccurrences(app.transcript.items, "Route failed after 3 attempts. What should fx do?"));
+    try std.testing.expectEqual(@as(usize, 0), countOccurrences(app.transcript.items, "Route failed after 3 attempts. What should ax do?"));
 }
 
 test "route recovery question cancel stays local" {
@@ -10677,7 +10677,7 @@ test "route recovery question cancel stays local" {
         .{ .label = "Try again later", .description = null },
     };
     const entries = [_]types.QuestionBatchEntry{
-        .{ .question = "Route failed. What should fx do?", .options = &opts },
+        .{ .question = "Route failed. What should ax do?", .options = &opts },
     };
     try app.question_prompt.syncFrom(alloc, &entries);
 
@@ -10688,7 +10688,7 @@ test "route recovery question cancel stays local" {
     try std.testing.expect(!app.worker.cancel_requested);
     try std.testing.expect(!app.question_prompt.isActive());
     try std.testing.expect(!app.stream.active);
-    try std.testing.expectEqual(@as(usize, 0), countOccurrences(app.transcript.items, "Route failed. What should fx do?"));
+    try std.testing.expectEqual(@as(usize, 0), countOccurrences(app.transcript.items, "Route failed. What should ax do?"));
 }
 
 test "app_input_runtime submits multi-question answers in entry order" {
@@ -12648,7 +12648,7 @@ test "app_input_runtime submits nonexistent relative and absolute image paths as
     const absolute_path = try std.fs.path.join(alloc, &.{ root, "missing.png" });
     defer alloc.free(absolute_path);
 
-    for ([_][]const u8{ "fx-missing-image.png", absolute_path }) |missing_path| {
+    for ([_][]const u8{ "ax-missing-image.png", absolute_path }) |missing_path| {
         var app = FakeSubmitApp{ .alloc = alloc };
         defer app.deinit();
         try app.input_runtime.edit_state.input.appendSlice(alloc, missing_path);

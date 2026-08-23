@@ -550,7 +550,7 @@ function findFxProcessId(rows: readonly string[]): number | undefined {
 
 test("Fx process discovery accepts basename and path process names", () => {
   expect(findFxProcessId(["11361 fx"])).toBe(11361);
-  expect(findFxProcessId(["11362 /workspace/zig-out/bin/fx"])).toBe(11362);
+  expect(findFxProcessId(["11362 /workspace/zig-out/bin/ax"])).toBe(11362);
 });
 
 function residentKib(pid: number): number {

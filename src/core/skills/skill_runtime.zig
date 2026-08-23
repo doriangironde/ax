@@ -967,7 +967,7 @@ pub fn skillSourceShortLabel(source: SkillSource) []const u8 {
 pub fn skillMenuFilterLabel(filter: SkillMenuSourceFilter) []const u8 {
     return switch (filter) {
         .all => "All",
-        .fx => "Fx",
+        .fx => "ax",
         .workspace => "Workspace",
         .opencode => "OpenCode",
         .codex => "Codex",

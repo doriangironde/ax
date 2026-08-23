@@ -54,7 +54,7 @@ pub fn load(alloc: Allocator, id: []const u8) LoadError!?[]u8 {
     return error.ValueTooLarge;
 }
 
-/// Persists a value only after fx has accepted and applied it.
+/// Persists a value only after ax has accepted and applied it.
 pub fn setAccepted(id: []const u8, value: []const u8) SaveError!void {
     if (fx_config_set(id.ptr, id.len, value.ptr, value.len) != 0) {
         return error.HostFailure;

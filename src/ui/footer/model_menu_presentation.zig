@@ -351,7 +351,7 @@ fn loadedCatalogStatusText(state: model_cache_runtime.ModelMenuCatalogState) ?[]
     if (state.access_level == .authenticated) {
         const source = state.source orelse return "Using an authenticated AI Gateway catalog.";
         return switch (source) {
-            .fx_login => "Gateway catalog: authenticated with fx login.",
+            .fx_login => "Gateway catalog: authenticated with ax login.",
             .ai_gateway_api_key => "Gateway catalog: authenticated with an API key.",
             .vercel_oidc_token => "Gateway catalog: authenticated with the Vercel session.",
             .stored_key => "Gateway catalog: authenticated with the stored API key.",
@@ -523,7 +523,7 @@ test "model menu states and navigation budget stay bounded" {
 
 test "model menu status follows provenance and retryable failure precedence" {
     try std.testing.expectEqualStrings(
-        "Gateway catalog: authenticated with fx login.",
+        "Gateway catalog: authenticated with ax login.",
         loadedCatalogStatusText(.{ .access_level = .authenticated, .source = .fx_login }).?,
     );
 

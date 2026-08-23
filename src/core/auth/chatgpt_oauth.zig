@@ -316,9 +316,9 @@ fn readBrowserCallbackTarget(alloc: Allocator, stream: std.Io.net.Stream) ![]u8 
 
 fn writeBrowserCallbackResponse(stream: std.Io.net.Stream, success: bool) !void {
     const body = if (success)
-        "Authorization complete. You can return to fx."
+        "Authorization complete. You can return to ax."
     else
-        "Authorization failed. Return to fx for details.";
+        "Authorization failed. Return to ax for details.";
     var buffer: [1024]u8 = undefined;
     var writer = stream.writer(io_mod.getIo(), &buffer);
     try writer.interface.print(

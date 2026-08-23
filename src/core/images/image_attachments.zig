@@ -174,7 +174,7 @@ pub fn createTempSnapshotDir(alloc: std.mem.Allocator) ![]u8 {
         io_mod.getIo().random(std.mem.asBytes(&suffix));
         const path = try std.fmt.allocPrint(
             alloc,
-            "{s}/fx-image-snapshots-{x}",
+            "{s}/ax-image-snapshots-{x}",
             .{ temp_root, suffix },
         );
         errdefer alloc.free(path);

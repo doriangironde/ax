@@ -1,6 +1,6 @@
 // Host contract:
 // - fields: stdout_file, shadow_vt, shadow_vt_alloc, layout,
-//   viewport_top_row, installed pre-fx document state
+//   viewport_top_row, installed pre-ax document state
 // This module owns the normal frame sink. Exact probes, lifecycle controls,
 // titles, crash recovery, and noninteractive output stay with their domain
 // owners.
