@@ -136,7 +136,7 @@ function sessionIdsFromHome(home: string): string[] {
 test(
   "logout cannot be undone by an in-flight login refresh",
   async () => {
-    const home = mkdtempSync(join(tmpdir(), "fx-auth-refresh-logout-race-e2e-"));
+    const home = mkdtempSync(join(tmpdir(), "ax-auth-refresh-logout-race-e2e-"));
     const contentionPath = join(home, ".fx", "auth-lock-contention");
     let releaseRefresh = () => {};
     const refreshMayFinish = new Promise<void>((resolve) => {
@@ -198,7 +198,7 @@ test(
         logoutResult.code,
         `stdout: ${logoutResult.stdout}\nstderr: ${logoutResult.stderr}`,
       ).toBe(0);
-      expect(logoutResult.stdout).toBe("Signed out of fx.\n");
+      expect(logoutResult.stdout).toBe("Signed out of ax.\n");
       expect(tokenRequestCount).toBe(1);
       expect(existsSync(join(home, ".fx", "auth.json"))).toBe(false);
       const revocations = oauth.requests.filter(
@@ -220,9 +220,9 @@ test(
 );
 
 test(
-  "fx ask refreshes an expired login then forces one refresh and retry after 401",
+  "ax ask refreshes an expired login then forces one refresh and retry after 401",
   async () => {
-    const home = mkdtempSync(join(tmpdir(), "fx-auth-refresh-e2e-"));
+    const home = mkdtempSync(join(tmpdir(), "ax-auth-refresh-e2e-"));
     const oauth = startFakeOAuth([EXPIRED_REFRESH_TOKEN, RETRY_REFRESH_TOKEN]);
     writeFxLogin(home, oauth.issuerUrl);
     const gateway = startFakeGateway([
@@ -298,7 +298,7 @@ test(
 test(
   "status and doctor report an expired login instead of refreshing it",
   async () => {
-    const home = mkdtempSync(join(tmpdir(), "fx-auth-expired-report-e2e-"));
+    const home = mkdtempSync(join(tmpdir(), "ax-auth-expired-report-e2e-"));
     const oauth = startFakeOAuth([EXPIRED_REFRESH_TOKEN]);
     writeFxLogin(home, oauth.issuerUrl);
     const authPath = join(home, ".fx", "auth.json");
@@ -320,14 +320,14 @@ test(
         `stdout: ${status.stdout}\nstderr: ${status.stderr}`,
       ).toBe(0);
       const statusJson = JSON.parse(status.stdout);
-      expect(statusJson.auth).toBe("fx login");
+      expect(statusJson.auth).toBe("ax login");
       expect(statusJson.auth_expired).toBe(true);
       expect(statusJson.auth_refreshable).toBe(true);
 
       const doctor = await runFx(["doctor", "--json"], { env, timeoutMs: TIMEOUT });
       expect(doctor.code).toBe(0);
       const doctorJson = JSON.parse(doctor.stdout);
-      expect(doctorJson.auth).toBe("fx login");
+      expect(doctorJson.auth).toBe("ax login");
       expect(doctorJson.auth_expired).toBe(true);
       const authCheck = doctorJson.checks.find(
         (check: { name: string }) => check.name === "auth",
@@ -349,9 +349,9 @@ test(
 );
 
 test(
-  "fx ask keeps a failed API key selected when login also exists",
+  "ax ask keeps a failed API key selected when login also exists",
   async () => {
-    const home = mkdtempSync(join(tmpdir(), "fx-auth-source-failure-e2e-"));
+    const home = mkdtempSync(join(tmpdir(), "ax-auth-source-failure-e2e-"));
     const tracePath = join(home, "trace.log");
     writeFileSync(tracePath, "");
     writeFxLogin(home);
@@ -422,7 +422,7 @@ test(
 test(
   "saved API-key 401 discards only the new empty session and preserves resume last",
   async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-auth-empty-session-e2e-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-auth-empty-session-e2e-")));
     const home = join(root, "home");
     const workspace = join(root, "workspace");
     mkdirSync(home);
@@ -469,7 +469,7 @@ test(
       );
       expect(rejected.code).toBe(1);
       expect(rejected.stderr).toBe(
-        "fx ask: AI_GATEWAY_API_KEY authentication failed · HTTP 401\n",
+        "ax ask: AI_GATEWAY_API_KEY authentication failed · HTTP 401\n",
       );
       const rejectedJson = JSON.parse(rejected.stdout);
       expect(rejectedJson).toMatchObject({
@@ -542,7 +542,7 @@ test(
 test(
   "OAuth sessions keep using their saved issuer when configuration changes",
   async () => {
-    const home = mkdtempSync(join(tmpdir(), "fx-auth-saved-issuer-e2e-"));
+    const home = mkdtempSync(join(tmpdir(), "ax-auth-saved-issuer-e2e-"));
     const issuerA = startFakeOAuth([ISSUER_A_ACCESS_TOKEN]);
     const issuerB = startFakeOAuth(["issuer-b-access-token"]);
     writeFxLogin(home, issuerA.issuerUrl);
@@ -579,7 +579,7 @@ test(
 
       const logout = await runFx(["logout"], { env, timeoutMs: TIMEOUT });
       expect(logout.code).toBe(0);
-      expect(logout.stdout).toBe("Signed out of fx.\n");
+      expect(logout.stdout).toBe("Signed out of ax.\n");
       expect(logout.stderr).toBe("");
 
       expect(
@@ -628,7 +628,7 @@ test(
 test(
   "invalid saved OAuth issuers receive no access or refresh token",
   async () => {
-    const home = mkdtempSync(join(tmpdir(), "fx-auth-invalid-issuer-e2e-"));
+    const home = mkdtempSync(join(tmpdir(), "ax-auth-invalid-issuer-e2e-"));
     const invalidIssuer = startFakeOAuth([], "/tenant");
     writeFxLogin(
       home,
@@ -648,7 +648,7 @@ test(
       });
 
       expect(logout.code).toBe(0);
-      expect(logout.stdout).toBe("Signed out of fx.\n");
+      expect(logout.stdout).toBe("Signed out of ax.\n");
       expect(logout.stderr).toBe("");
       expect(invalidIssuer.requests).toEqual([]);
       expect(logout.stdout).not.toContain("expired-access-token");

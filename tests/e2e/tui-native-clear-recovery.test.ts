@@ -45,7 +45,7 @@ function textHex(text: string): string[] {
 }
 
 tmuxTest("direct native-clear recovery resets the view and replays the held draft", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "fx-native-clear-"));
+  const dir = mkdtempSync(join(tmpdir(), "ax-native-clear-"));
   temp_dirs.push(dir);
   const trace_path = join(dir, "trace.log");
   const stderr_path = join(dir, "stderr.log");
@@ -79,7 +79,7 @@ tmuxTest("direct native-clear recovery resets the view and replays the held draf
 }, 30_000);
 
 tmuxTest("direct healthy screens retain an ordinary burst without resetting", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "fx-native-clear-match-"));
+  const dir = mkdtempSync(join(tmpdir(), "ax-native-clear-match-"));
   temp_dirs.push(dir);
   const trace_path = join(dir, "trace.log");
   const stderr_path = join(dir, "stderr.log");
@@ -112,7 +112,7 @@ tmuxTest("direct healthy screens retain an ordinary burst without resetting", as
 }, 30_000);
 
 tmuxTest("native-clear replay settles a complete paste before the next key", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "fx-native-clear-paste-"));
+  const dir = mkdtempSync(join(tmpdir(), "ax-native-clear-paste-"));
   temp_dirs.push(dir);
   const trace_path = join(dir, "trace.log");
   const stderr_path = join(dir, "stderr.log");
@@ -147,7 +147,7 @@ tmuxTest("native-clear replay settles a complete paste before the next key", asy
 }, 30_000);
 
 tmuxTest("tmux leaves native-clear probing disabled and preserves ordinary input", async () => {
-  const dir = mkdtempSync(join(tmpdir(), "fx-native-clear-tmux-"));
+  const dir = mkdtempSync(join(tmpdir(), "ax-native-clear-tmux-"));
   temp_dirs.push(dir);
   const trace_path = join(dir, "trace.log");
   const stderr_path = join(dir, "stderr.log");

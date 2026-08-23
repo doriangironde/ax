@@ -183,7 +183,7 @@ function startFakeGateway(
 }
 
 function createIsolatedRoot() {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-file-paths-e2e-")));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-file-paths-e2e-")));
   const home = join(root, "home");
   const workspace = join(root, "workspace");
   const external = join(root, "external");
@@ -222,7 +222,7 @@ function gatewayEnv(
 function parseFxJson(result: Awaited<ReturnType<typeof runFx>>) {
   if (result.code !== 0) {
     throw new Error(
-      `fx exited ${result.code}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+      `ax exited ${result.code}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
     );
   }
   return JSON.parse(result.stdout.trim()) as {
@@ -698,21 +698,21 @@ describe("filesystem path handling", () => {
     async () => {
       const root = createIsolatedRoot();
       try {
-        const homeFile = join(root.home, "fx-path-fixture.txt");
-        const externalFile = join(root.external, "fx-path-fixture.txt");
+        const homeFile = join(root.home, "ax-path-fixture.txt");
+        const externalFile = join(root.external, "ax-path-fixture.txt");
         writeFileSync(homeFile, "HOME_FIXTURE_CONTENT\n");
         writeFileSync(externalFile, "EXTERNAL_FIXTURE_CONTENT\n");
 
         const cases = [
           {
             id: "read_home_1",
-            path: "~/fx-path-fixture.txt",
+            path: "~/ax-path-fixture.txt",
             canonical: homeFile,
             content: "HOME_FIXTURE_CONTENT",
           },
           {
             id: "read_relative_1",
-            path: "../external/fx-path-fixture.txt",
+            path: "../external/ax-path-fixture.txt",
             canonical: externalFile,
             content: "EXTERNAL_FIXTURE_CONTENT",
           },
@@ -1079,7 +1079,7 @@ describe("filesystem path handling", () => {
   );
 
   test(
-    "registered typed write and edit use one canonical fx ask mutation path",
+    "registered typed write and edit use one canonical ax ask mutation path",
     async () => {
       const root = createIsolatedRoot();
       try {
@@ -1461,13 +1461,13 @@ describe("filesystem path handling", () => {
         const literalWorkspacePath = join(
           root.workspace,
           "~",
-          "fx-path-fixture.txt",
+          "ax-path-fixture.txt",
         );
         await runTerminalToolScenario({
           root,
           id: "read_missing_home_1",
           name: "read_file",
-          input: { path: "~/fx-path-fixture.txt" },
+          input: { path: "~/ax-path-fixture.txt" },
           unsetHome: true,
           expectedResultRequest: ["HomeNotSet"],
         });

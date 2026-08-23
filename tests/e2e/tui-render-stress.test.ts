@@ -49,7 +49,7 @@ async function launch(
   width: number,
   height: number,
 ): Promise<{ session: TmuxSession; tracePath: string }> {
-  const workDir = mkdtempSync(join(tmpdir(), `fx-render-stress-${run}-`));
+  const workDir = mkdtempSync(join(tmpdir(), `ax-render-stress-${run}-`));
   workDirs.push(workDir);
   const home = join(workDir, "home");
   mkdirSync(home);
@@ -99,7 +99,7 @@ describe.skipIf(SKIP)("tui: render stress", () => {
 
         const firstPrompt = `visible_user_prompt_${run}`;
         await session.sendText(firstPrompt);
-        await session.waitForText("Fx needs access to Vercel AI Gateway", 5_000);
+        await session.waitForText("ax needs access to Vercel AI Gateway", 5_000);
 
         const tailToken = `tail_${run}_visibl`;
         await session.sendKeys(`-l '${longInput(run)}'`);

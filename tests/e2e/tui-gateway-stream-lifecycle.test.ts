@@ -748,7 +748,7 @@ function createArtifactRoot(): string {
     artifactRoot = realpathSync(configured);
   } else {
     artifactRoot = realpathSync(
-      mkdtempSync(join(tmpdir(), "fx-streamed-tool-lifecycle-artifacts-")),
+      mkdtempSync(join(tmpdir(), "ax-streamed-tool-lifecycle-artifacts-")),
     );
   }
   return artifactRoot;
@@ -1919,7 +1919,7 @@ describe.skipIf(!tmuxAvailable())("TUI gateway stream lifecycle", () => {
       const scrollback = await session!.captureFullScrollback();
 
       expect(queuedGateway.requests.length).toBe(1);
-      expect(scrollback).not.toContain("What should fx do?");
+      expect(scrollback).not.toContain("What should ax do?");
       expect(pane).toContain("Change model");
       expect(pane).toContain("Try again later");
       expect(pane).toContain("Response blocked by content filter");
@@ -2284,7 +2284,7 @@ describe.skipIf(!tmuxAvailable())("TUI gateway stream lifecycle", () => {
       expect(scrollback).toContain(finalText);
       expect(scrollback).toMatch(TURN_SUMMARY_WITH_TOKENS);
       expect(scrollback).not.toContain("✓ recovered");
-      expect(scrollback).not.toContain("What should fx do?");
+      expect(scrollback).not.toContain("What should ax do?");
       expect(scrollback).not.toContain("request failed: ModelError");
       expect(readFileSync(stderrPath, "utf8")).toBe("");
     },
@@ -2324,7 +2324,7 @@ describe.skipIf(!tmuxAvailable())("TUI gateway stream lifecycle", () => {
       expect(queuedGateway.requests.length).toBe(2);
       expect(scrollback.split("partial unsafe output").length - 1).toBe(1);
       expect(scrollback).toContain(finalText);
-      expect(scrollback).not.toContain("What should fx do?");
+      expect(scrollback).not.toContain("What should ax do?");
       expect(readFileSync(stderrPath, "utf8")).toBe("");
     },
     TIMEOUT,
@@ -2345,7 +2345,7 @@ describe.skipIf(!tmuxAvailable())("TUI gateway stream lifecycle", () => {
 
       expect(queuedGateway.requests.length).toBe(2);
       expect(scrollback).toContain(finalText);
-      expect(scrollback).not.toContain("What should fx do?");
+      expect(scrollback).not.toContain("What should ax do?");
       expect(readFileSync(stderrPath, "utf8")).toBe("");
     },
     TIMEOUT,
@@ -2354,7 +2354,7 @@ describe.skipIf(!tmuxAvailable())("TUI gateway stream lifecycle", () => {
   test(
     "unavailable read_tool_result renders and persists a failed result",
     async () => {
-      root = realpathSync(mkdtempSync(join(tmpdir(), "fx-read-tool-result-failure-")));
+      root = realpathSync(mkdtempSync(join(tmpdir(), "ax-read-tool-result-failure-")));
       const home = join(root, "home");
       const workspacePath = join(root, "workspace");
       const stderrPath = join(root, "stderr.log");
@@ -4874,7 +4874,7 @@ describe.skipIf(!tmuxAvailable())("TUI gateway stream lifecycle", () => {
         expect(observed.stderr).toBe(
           stage === "baseline-silent"
             ? ""
-            : "fx: LifecycleReconciliationCollision\n",
+            : "ax: LifecycleReconciliationCollision\n",
         );
         return;
       }
@@ -6217,7 +6217,7 @@ describe.skipIf(!tmuxAvailable())("TUI gateway stream lifecycle", () => {
       expect(runningComposerRow).toBeGreaterThanOrEqual(0);
       await session.sendKeys("Escape");
 
-      const feedback = "■ Cancelled sleep 30 · What can fx do differently?";
+      const feedback = "■ Cancelled sleep 30 · What can ax do differently?";
       const transitionComposerRows: number[] = [];
       let compact = "";
       const feedbackDeadline = Date.now() + TIMEOUT;
@@ -6374,7 +6374,7 @@ describe.skipIf(!tmuxAvailable())("TUI gateway stream lifecycle", () => {
       await waitForPath(donePath);
       expect(readTrimmed(join(artifacts, "child.status"))).toBe("0");
       expect(readFileSync(join(artifacts, "stderr.log"), "utf8")).toBe(
-        "fx needs at least 5 terminal rows.\n",
+        "ax needs at least 5 terminal rows.\n",
       );
       expect(readTrimmed(join(artifacts, "stty.after"))).toBe(
         readTrimmed(join(artifacts, "stty.before")),
@@ -6425,7 +6425,7 @@ describe.skipIf(!tmuxAvailable())("TUI gateway stream lifecycle", () => {
       await waitForPath(donePath);
       expect(readTrimmed(join(artifacts, "child.status"))).not.toBe("0");
       expect(readFileSync(join(artifacts, "stderr.log"), "utf8")).toBe(
-        "fx: PathNotFound\n",
+        "ax: PathNotFound\n",
       );
       expect(readTrimmed(join(artifacts, "stty.after"))).toBe(
         readTrimmed(join(artifacts, "stty.before")),
@@ -6670,7 +6670,7 @@ describe.skipIf(!tmuxAvailable())("TUI gateway stream lifecycle", () => {
       const stderrPath = join(root, "stderr.log");
       const tapePath = join(root, "session.fxtape");
       const tracePath = join(root, "trace.log");
-      const sourceUrl = "https://example.test/fx-provider-search";
+      const sourceUrl = "https://example.test/ax-provider-search";
       const finalText = "PROVIDER_SEARCH_DONE";
       mkdirSync(join(home, ".fx"), { recursive: true });
       mkdirSync(workspace, { recursive: true });
@@ -6688,7 +6688,7 @@ describe.skipIf(!tmuxAvailable())("TUI gateway stream lifecycle", () => {
             type: "tool-result",
             toolCallId: "provider_search_direct",
             result: {
-              results: [{ title: "Fx provider source", url: sourceUrl }],
+              results: [{ title: "ax provider source", url: sourceUrl }],
             },
           },
           {

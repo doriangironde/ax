@@ -70,7 +70,7 @@ function createRoot(
   remoteOverrides: Record<string, unknown> = {},
 ) {
   const root = realpathSync(
-    mkdtempSync(join(tmpdir(), `fx-mcp-legacy-${label}-`)),
+    mkdtempSync(join(tmpdir(), `ax-mcp-legacy-${label}-`)),
   );
   cleanupRoot = root;
   const home = join(root, "home");
@@ -155,8 +155,8 @@ function preserveLegacyFailure(
   activeGateway: ReturnType<typeof startFakeGateway>,
 ): void {
   cleanupRoot = null;
-  writeFileSync(join(root.root, "fx-stdout.log"), result.stdout);
-  writeFileSync(join(root.root, "fx-stderr.log"), result.stderr);
+  writeFileSync(join(root.root, "ax-stdout.log"), result.stdout);
+  writeFileSync(join(root.root, "ax-stderr.log"), result.stderr);
   writeFileSync(
     join(root.root, "failure.json"),
     JSON.stringify({
@@ -169,7 +169,7 @@ function preserveLegacyFailure(
       gatewayRequests: activeGateway.requests.map((request) => request.body),
     }, null, 2),
   );
-  throw new Error(`fx ${label} failed; retained artifacts: ${root.root}`);
+  throw new Error(`ax ${label} failed; retained artifacts: ${root.root}`);
 }
 
 describe("version-scoped legacy MCP remote transports", () => {
@@ -411,7 +411,7 @@ describe("version-scoped legacy MCP remote transports", () => {
   }, 30_000);
 
   for (const version of VERSIONS) {
-    test(`fresh fx ask calls Streamable HTTP ${version} with its lifecycle headers`, async () => {
+    test(`fresh ax ask calls Streamable HTTP ${version} with its lifecycle headers`, async () => {
       streamable = startLegacyStreamableHttpFixture(version);
       const root = createRoot(`ask-${version}`, "http", streamable.url);
       gateway = startToolGateway(`${version} complete.`);
@@ -882,7 +882,7 @@ describe("version-scoped legacy MCP remote transports", () => {
     expect(gateway.requests[2]?.body).toContain("McpAuthenticationRequired");
   }, 30_000);
 
-  test("fresh fx ask uses explicit HTTP+SSE endpoint discovery and message routing", async () => {
+  test("fresh ax ask uses explicit HTTP+SSE endpoint discovery and message routing", async () => {
     legacySse = startLegacyHttpSseFixture();
     const root = createRoot(
       "sse-ask",

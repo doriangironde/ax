@@ -141,9 +141,9 @@ async function waitForProfileUsage(
 }
 
 test(
-  "fx ask settles authoritative stream usage without delayed reconciliation",
+  "ax ask settles authoritative stream usage without delayed reconciliation",
   async () => {
-    root = mkdtempSync(join(tmpdir(), "fx-cost-ask-exit-"));
+    root = mkdtempSync(join(tmpdir(), "ax-cost-ask-exit-"));
     const home = join(root, "home");
     const workspace = join(root, "workspace");
     mkdirSync(home, { recursive: true });
@@ -230,8 +230,8 @@ test(
   10_000,
 );
 
-test("fx ask gives immediate generation reconciliation a bounded drain", async () => {
-  root = mkdtempSync(join(tmpdir(), "fx-cost-ask-reconcile-"));
+test("ax ask gives immediate generation reconciliation a bounded drain", async () => {
+  root = mkdtempSync(join(tmpdir(), "ax-cost-ask-reconcile-"));
   const home = join(root, "home");
   const workspace = join(root, "workspace");
   mkdirSync(home, { recursive: true });
@@ -283,8 +283,8 @@ test("fx ask gives immediate generation reconciliation a bounded drain", async (
   expect(usage.pending).toEqual([]);
 });
 
-test("fx usage reports an unresolved delayed fallback as pending", async () => {
-  root = mkdtempSync(join(tmpdir(), "fx-cost-pending-profile-"));
+test("ax usage reports an unresolved delayed fallback as pending", async () => {
+  root = mkdtempSync(join(tmpdir(), "ax-cost-pending-profile-"));
   const home = join(root, "home");
   const workspace = join(root, "workspace");
   mkdirSync(home, { recursive: true });
@@ -344,8 +344,8 @@ test("fx usage reports an unresolved delayed fallback as pending", async () => {
   expect(gateway.generationRequests).toEqual([GENERATION_ID]);
 });
 
-test("fx usage reports a missing generation identity as incomplete", async () => {
-  root = mkdtempSync(join(tmpdir(), "fx-cost-incomplete-profile-"));
+test("ax usage reports a missing generation identity as incomplete", async () => {
+  root = mkdtempSync(join(tmpdir(), "ax-cost-incomplete-profile-"));
   const home = join(root, "home");
   const workspace = join(root, "workspace");
   mkdirSync(home, { recursive: true });
@@ -400,7 +400,7 @@ describe.skipIf(!tmuxAvailable())("tui: durable session cost", () => {
     test(
       `pending generation reconciliation survives ${resumeMode} resume`,
       async () => {
-        root = mkdtempSync(join(tmpdir(), `fx-cost-${resumeMode}-resume-`));
+        root = mkdtempSync(join(tmpdir(), `ax-cost-${resumeMode}-resume-`));
         const home = join(root, "home");
         const workspace = join(root, "workspace");
         const stderrPath = join(root, "stderr.log");
@@ -538,7 +538,7 @@ describe.skipIf(!tmuxAvailable())("tui: durable session cost", () => {
   test(
     "authoritative generation totals survive process resume",
     async () => {
-      root = mkdtempSync(join(tmpdir(), "fx-cost-"));
+      root = mkdtempSync(join(tmpdir(), "ax-cost-"));
       const home = join(root, "home");
       const workspace = join(root, "workspace");
       mkdirSync(home, { recursive: true });

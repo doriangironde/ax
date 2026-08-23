@@ -327,12 +327,12 @@ function terminalTransportPaths(home: string) {
     return { dir: durableDir, socket: durableSocket };
   }
   const digest = createHash("sha256")
-    .update("fx.terminal.transport.v1\0")
+    .update("ax.terminal.transport.v1\0")
     .update(home)
     .digest("hex")
     .slice(0, 32);
   const base = process.platform === "darwin" ? "/private/tmp" : "/tmp";
-  const dir = join(base, `fx-terminal-${process.getuid?.() ?? 0}-${digest}`);
+  const dir = join(base, `ax-terminal-${process.getuid?.() ?? 0}-${digest}`);
   return { dir, socket: join(dir, "host.sock") };
 }
 

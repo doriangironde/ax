@@ -107,7 +107,7 @@ function summarize(values: number[]) {
 
 function makePaths(label: string): Paths {
   const tempRoot = platform() === "darwin" ? "/private/tmp" : tmpdir();
-  const root = realpathSync(mkdtempSync(join(tempRoot, `fx-r-${label}-`)));
+  const root = realpathSync(mkdtempSync(join(tempRoot, `ax-r-${label}-`)));
   return {
     root,
     home: join(root, "home"),

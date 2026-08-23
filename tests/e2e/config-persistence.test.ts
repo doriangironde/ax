@@ -126,7 +126,7 @@ describe.skipIf(!tmuxAvailable())("config persistence", () => {
   serialTest(
     "user preferences migrate globally and load in another project",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-config-persistence-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-config-persistence-"));
       const gateway = startFakeGateway([], {
         models: [{
           id: "anthropic/claude-opus-4.7",
@@ -338,7 +338,7 @@ describe.skipIf(!tmuxAvailable())("config persistence", () => {
   serialTest(
     "unscoped allowlist stays local while explicit user rules cross projects",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-config-permission-scopes-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-config-permission-scopes-"));
       try {
         const home = join(root, "home");
         const workspaceA = join(root, "workspace-a");
@@ -454,7 +454,7 @@ describe.skipIf(!tmuxAvailable())("config persistence", () => {
   serialTest(
     "legacy output settings remain inert and output text follows prompt admission",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-config-output-shadow-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-config-output-shadow-"));
       try {
         const home = join(root, "home");
         const workspace = join(root, "workspace");
@@ -494,7 +494,7 @@ describe.skipIf(!tmuxAvailable())("config persistence", () => {
         });
         await session.waitForText("Run /help", TIMEOUT);
         await session.sendText("/output quiet");
-        await session.waitForText("Fx needs access to Vercel AI Gateway", TIMEOUT);
+        await session.waitForText("ax needs access to Vercel AI Gateway", TIMEOUT);
         expect(composerContains(await session.capturePane(), "/output quiet")).toBe(
           true,
         );
@@ -536,7 +536,7 @@ describe.skipIf(!tmuxAvailable())("config persistence", () => {
   serialTest(
     "Escape keeps the model picker dismissed until the model trigger restarts",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-model-picker-dismissal-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-model-picker-dismissal-"));
       const gateway = startFakeGateway([], {
         models: [{
           id: "xai/grok-build-1",
@@ -606,7 +606,7 @@ describe.skipIf(!tmuxAvailable())("config persistence", () => {
   test(
     "configured effort and Fast are visible before model catalog resolves",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-startup-preferences-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-startup-preferences-"));
       let releaseCatalog: (() => void) | null = null;
       const catalogRelease = new Promise<void>((resolve) => {
         releaseCatalog = resolve;
@@ -674,7 +674,7 @@ describe.skipIf(!tmuxAvailable())("config persistence", () => {
   test(
     "Fast command rejects a tag-only intrinsic Fast alias",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-fast-unsupported-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-fast-unsupported-"));
       const gateway = startFakeGateway([], {
         models: [{
           id: "anthropic/claude-opus-4.8-fast",
@@ -731,7 +731,7 @@ describe.skipIf(!tmuxAvailable())("config persistence", () => {
   test(
     "settings reasoning effort changes without mutating the selected model",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-settings-effort-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-settings-effort-"));
       const gateway = startFakeGateway([], {
         models: [{
           id: "zai/glm-5.2",
@@ -803,7 +803,7 @@ describe.skipIf(!tmuxAvailable())("config persistence", () => {
   test(
     "Opus 4.8 Fast pricing drives picker request and persistence",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-anthropic-capabilities-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-anthropic-capabilities-"));
       const gateway = startFakeGateway(
         [fakeGatewayFinalText("Opus fast complete")],
         {
@@ -893,7 +893,7 @@ describe.skipIf(!tmuxAvailable())("config persistence", () => {
         await session.waitForText("anthropic/claude-opus-4.8", TIMEOUT);
         expect(readFileSync(settingsPath, "utf8")).toBe(initialSettings);
         await session.sendKeys("Enter");
-        // Gateway order is preserved after fx's default sentinel.
+        // Gateway order is preserved after ax's default sentinel.
         await session.waitForText("default", TIMEOUT);
         for (let i = 0; i < 2; i += 1) await session.sendKeys("Down");
         await session.waitForText("xhigh", TIMEOUT);
@@ -954,7 +954,7 @@ describe.skipIf(!tmuxAvailable())("config persistence", () => {
   test(
     "GPT 5.6 Sol priority pricing drives the Fast request",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-openai-capabilities-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-openai-capabilities-"));
       const gateway = startFakeGateway(
         [
           fakeGatewayFinalText("GPT 5.6 stale effort filtered"),
@@ -1091,7 +1091,7 @@ describe.skipIf(!tmuxAvailable())("config persistence", () => {
   test(
     "Fable 5 xhigh picker selection persists without fast mode",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-fable-capabilities-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-fable-capabilities-"));
       const gateway = startFakeGateway([], {
         models: [{
           id: "anthropic/claude-fable-5",
@@ -1151,7 +1151,7 @@ describe.skipIf(!tmuxAvailable())("config persistence", () => {
   test(
     "model picker selection persists when a matching skill exists",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-model-picker-skill-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-model-picker-skill-"));
       const gateway = startFakeGateway([], {
         models: [{
           id: "xai/grok-build-1",
@@ -1223,7 +1223,7 @@ describe.skipIf(!tmuxAvailable())("config persistence", () => {
   test(
     "Gateway catalog reasoning drives portable effort requests and persistence",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-gateway-capabilities-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-gateway-capabilities-"));
       const gateway = startFakeGateway(
         [
           fakeGatewayFinalText("portable auto complete"),
@@ -1353,7 +1353,7 @@ describe.skipIf(!tmuxAvailable())("config persistence", () => {
   serialTest(
     "settings persistence remains available when session storage is unavailable",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-config-first-write-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-config-first-write-"));
       try {
         const home = join(root, "home");
         const workspace = join(root, "workspace");
@@ -1404,7 +1404,7 @@ describe.skipIf(!tmuxAvailable())("config persistence", () => {
   serialTest(
     "workspace statusline stays active when user settings cannot be saved",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-statusline-write-failure-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-statusline-write-failure-"));
       try {
         const home = join(root, "home");
         const workspace = join(root, "workspace-write-failure-visible");
@@ -1446,7 +1446,7 @@ describe.skipIf(!tmuxAvailable())("config persistence", () => {
   );
 
   serialTest("config diagnostics preserve invalid, oversized, and unsafe primaries", async () => {
-    const root = mkdtempSync(join(tmpdir(), "fx-config-diagnostics-"));
+    const root = mkdtempSync(join(tmpdir(), "ax-config-diagnostics-"));
     try {
       const home = join(root, "home");
       const workspace = join(root, "workspace");
@@ -1540,7 +1540,7 @@ describe.skipIf(!tmuxAvailable())("config persistence", () => {
   serialTest(
     "concurrent global mutations preserve both values and unknown keys",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-config-concurrent-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-config-concurrent-"));
       try {
         const home = join(root, "home");
         const workspace = join(root, "workspace");
@@ -1617,7 +1617,7 @@ describe.skipIf(!tmuxAvailable())("config persistence", () => {
   serialTest(
     "stale workspace mutations preserve an ordered remove and add",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-workspace-concurrent-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-workspace-concurrent-"));
       try {
         const home = join(root, "home");
         const workspace = join(root, "workspace");
@@ -1710,7 +1710,7 @@ describe.skipIf(!tmuxAvailable())("config persistence", () => {
   serialTest(
     "workspace add rejects effective capacity without changing settings",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-workspace-capacity-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-workspace-capacity-"));
       try {
         const home = join(root, "home");
         const workspace = join(root, "workspace");
@@ -1774,7 +1774,7 @@ describe.skipIf(!tmuxAvailable())("config persistence", () => {
   serialTest(
     "workspace removal persists after an observed source disappears",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-workspace-source-disappears-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-workspace-source-disappears-"));
       try {
         const home = join(root, "home");
         const workspace = join(root, "workspace");
@@ -1828,7 +1828,7 @@ describe.skipIf(!tmuxAvailable())("config persistence", () => {
   serialTest(
     "workspace removal persists after an observed source retargets",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-workspace-source-moves-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-workspace-source-moves-"));
       try {
         const home = join(root, "home");
         const workspace = join(root, "workspace");
@@ -1886,7 +1886,7 @@ describe.skipIf(!tmuxAvailable())("config persistence", () => {
   serialTest(
     "workspace removal consumes a concurrent exact canonical replacement",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-workspace-target-replaced-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-workspace-target-replaced-"));
       try {
         const home = join(root, "home");
         const workspace = join(root, "workspace");
@@ -1974,7 +1974,7 @@ describe.skipIf(!tmuxAvailable())("config persistence", () => {
   serialTest(
     "workspace removal prefers a concurrent canonical survivor before restart",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-workspace-survivor-moves-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-workspace-survivor-moves-"));
       try {
         const home = join(root, "home");
         const workspace = join(root, "workspace");
@@ -2092,7 +2092,7 @@ describe.skipIf(!tmuxAvailable())("config persistence", () => {
   serialTest(
     "workspace removal uses observed identity and preserves an unseen source",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-workspace-source-retarget-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-workspace-source-retarget-"));
       try {
         const home = join(root, "home");
         const workspace = join(root, "workspace");
@@ -2165,7 +2165,7 @@ describe.skipIf(!tmuxAvailable())("config persistence", () => {
   serialTest(
     "workspace add canonicalizes observed aliases before restart",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-workspace-source-restart-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-workspace-source-restart-"));
       try {
         const home = join(root, "home");
         const workspace = join(root, "workspace");
@@ -2250,7 +2250,7 @@ describe.skipIf(!tmuxAvailable())("config persistence", () => {
   serialTest(
     "workspace slash mutations persist across restart and remove cleanly",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-workspace-slash-persistence-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-workspace-slash-persistence-"));
       try {
         const home = join(root, "home");
         const workspace = join(root, "workspace");
@@ -2326,7 +2326,7 @@ describe.skipIf(!tmuxAvailable())("config persistence", () => {
   serialTest(
     "workspace list marks a directory deleted during the session unavailable",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-workspace-live-availability-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-workspace-live-availability-"));
       try {
         const home = join(root, "home");
         const workspace = join(root, "workspace");
@@ -2385,7 +2385,7 @@ describe.skipIf(!tmuxAvailable())("config persistence", () => {
   serialTest(
     "workspace list restores canonical access through a new symlinked ancestor",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-workspace-restored-canonical-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-workspace-restored-canonical-"));
       try {
         const home = join(root, "home");
         const workspace = join(root, "workspace");
@@ -2478,7 +2478,7 @@ describe.skipIf(!tmuxAvailable())("config persistence", () => {
   serialTest(
     "workspace slash removal explains launch restoration and uses friendly errors",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-workspace-launch-removal-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-workspace-launch-removal-"));
       try {
         const home = join(root, "home");
         const workspace = join(root, "workspace");

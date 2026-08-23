@@ -57,7 +57,7 @@ function createRoot(
   operationTimeoutMs = 5_000,
   required = false,
 ) {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), `fx-mcp-http-${label}-`)));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), `ax-mcp-http-${label}-`)));
   cleanupRoot = root;
   const home = join(root, "home");
   const workspace = join(root, "workspace");
@@ -141,8 +141,8 @@ function preserveHttpFailure(
 ): void {
   if (result.code === 0 && !force) return;
   cleanupRoot = null;
-  writeFileSync(join(root.root, "fx-stdout.log"), result.stdout);
-  writeFileSync(join(root.root, "fx-stderr.log"), result.stderr);
+  writeFileSync(join(root.root, "ax-stdout.log"), result.stdout);
+  writeFileSync(join(root.root, "ax-stderr.log"), result.stderr);
   writeFileSync(
     join(root.root, "failure.json"),
     JSON.stringify({
@@ -152,7 +152,7 @@ function preserveHttpFailure(
       gatewayRequests: activeGateway.requests.map((request) => request.body),
     }, null, 2),
   );
-  throw new Error(`fx ${label} failed; retained artifacts: ${root.root}`);
+  throw new Error(`ax ${label} failed; retained artifacts: ${root.root}`);
 }
 
 function assertModernWire(
@@ -1032,7 +1032,7 @@ describe("modern MCP Streamable HTTP", () => {
   }, 30_000);
 
   for (const mode of ["json", "sse"] as ModernHttpMode[]) {
-    test(`fresh fx ask calls the request-scoped ${mode.toUpperCase()} fixture`, async () => {
+    test(`fresh ax ask calls the request-scoped ${mode.toUpperCase()} fixture`, async () => {
       fixture = startModernMcpHttpFixture(mode);
       const root = createRoot(`ask-${mode}`, fixture);
       gateway = startToolGateway(`${mode} MCP HTTP complete.`);
@@ -1057,7 +1057,7 @@ describe("modern MCP Streamable HTTP", () => {
     }, 30_000);
   }
 
-  test("fresh fx ask delegates unsupported input and output schema assertions", async () => {
+  test("fresh ax ask delegates unsupported input and output schema assertions", async () => {
     fixture = startModernMcpHttpFixture("server_authoritative_schema");
     const root = createRoot("server-authoritative-schema", fixture, 5_000, true);
     gateway = startToolGateway("Server-authoritative schema complete.");

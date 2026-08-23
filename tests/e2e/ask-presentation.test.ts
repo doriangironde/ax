@@ -136,7 +136,7 @@ function fakeGatewayStreamingText(lines: string[], delayMs: number) {
   );
 }
 
-describe("fx ask presentation", () => {
+describe("ax ask presentation", () => {
   test("redirected command output separates the next tool header", async () => {
     const root = createRoot();
     const gateway = startFakeGateway([
@@ -323,7 +323,7 @@ describe("fx ask presentation", () => {
     expect(gateway.requests[2]!.body).toContain("no-alias:no-function");
     expect(gateway.requests[4]!.body).toContain("tool_execution_failed");
     expect(gateway.requests[4]!.body).toContain(
-      "Durable terminal actions require a saved fx session.",
+      "Durable terminal actions require a saved ax session.",
     );
     expect(gateway.requests[4]!.body).toContain(
       "Use terminal.exec, or rerun without --no-save.",
@@ -343,7 +343,7 @@ describe("fx ask presentation", () => {
   }, TIMEOUT);
 
   test.skipIf(!tmuxAvailable())(
-    "fx ask executes the shared public terminal tool through the tmux backend",
+    "ax ask executes the shared public terminal tool through the tmux backend",
     async () => {
       const root = createShortRoot();
       const toolCallId = "ask_terminal_tmux_1";

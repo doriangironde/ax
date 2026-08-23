@@ -64,7 +64,7 @@ afterEach(async () => {
 function createIsolatedRoot(): IsolatedRoot {
   const tempRoot = existsSync("/private/tmp") ? "/private/tmp" : tmpdir();
   const root = realpathSync(
-    mkdtempSync(join(tempRoot, "fx-file-approval-e2e-")),
+    mkdtempSync(join(tempRoot, "ax-file-approval-e2e-")),
   );
   const home = join(root, "home");
   const workspace = join(root, "workspace");
@@ -260,7 +260,7 @@ function expectApprovalControls(
   for (const oldCopy of [
     "1. Yes, proceed",
     "2. Yes, and don't ask again",
-    "3. No, and tell fx",
+    "3. No, and tell ax",
     "This action changes files in your workspace.",
   ]) {
     expect(block).not.toContain(oldCopy);
@@ -796,7 +796,7 @@ describe.skipIf(!tmuxAvailable())("tui: file permissions", () => {
         required: ["amended-review.txt", "+ amended review content"],
       });
       await session.sendKeys("Tab");
-      await session.waitForText("Apply once, and tell fx what to do next", TIMEOUT);
+      await session.waitForText("Apply once, and tell ax what to do next", TIMEOUT);
       await session.sendLiteralText(feedback);
       await session.waitForText(`Apply once, ${feedback}`, TIMEOUT);
 

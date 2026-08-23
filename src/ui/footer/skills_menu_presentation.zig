@@ -444,7 +444,7 @@ test "skills menu narrow header always shows the active source" {
         defer fx_prepared.deinit(alloc);
         var fx_header = try composeSkillsMenuRow(alloc, fx_prepared, 0, width);
         defer fx_header.deinit(alloc);
-        try std.testing.expect(std.mem.find(u8, fx_header.items, "[ax]") != null);
+        try std.testing.expect(std.mem.find(u8, fx_header.items, "[Fx]") != null);
         try std.testing.expect(
             display_width.visibleWidthIgnoringAnsi(fx_header.items) <= width,
         );

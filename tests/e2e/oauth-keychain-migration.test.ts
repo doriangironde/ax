@@ -198,7 +198,7 @@ keychainTest(
   async () => {
     const account = isolatedAccount();
     const before = productionMetadata();
-    const home = mkdtempSync(join(tmpdir(), "fx-oauth-keychain-migration-"));
+    const home = mkdtempSync(join(tmpdir(), "ax-oauth-keychain-migration-"));
     attachSystemKeychain(home);
     const issuer = startOAuthIssuer();
     const gateway = startFakeGateway([
@@ -218,7 +218,7 @@ keychainTest(
     try {
       const first = await runFx(["status", "--json"], { env, timeoutMs: TIMEOUT });
       expect(first.code, `stdout: ${first.stdout}\nstderr: ${first.stderr}`).toBe(0);
-      expect(JSON.parse(first.stdout).auth).toBe("fx login");
+      expect(JSON.parse(first.stdout).auth).toBe("ax login");
       expect(
         existsSync(join(home, ".fx", "auth.json")),
         readFileSync(join(home, "oauth-keychain-trace.log"), "utf8"),
@@ -250,12 +250,12 @@ keychainTest(
       rmSync(join(home, ".fx"), { recursive: true, force: true });
       const restarted = await runFx(["status", "--json"], { env, timeoutMs: TIMEOUT });
       expect(restarted.code).toBe(0);
-      expect(JSON.parse(restarted.stdout).auth).toBe("fx login");
+      expect(JSON.parse(restarted.stdout).auth).toBe("ax login");
       expect(existsSync(join(home, ".fx"))).toBe(false);
 
       const logout = await runFx(["logout"], { env, timeoutMs: TIMEOUT });
       expect(logout.code, `stdout: ${logout.stdout}\nstderr: ${logout.stderr}`).toBe(0);
-      expect(logout.stdout).toBe("Signed out of fx.\n");
+      expect(logout.stdout).toBe("Signed out of ax.\n");
       expect(loadKeychainItem(account, home)).toBeNull();
       expect(issuer.requests.filter((request) => request.path === "/oauth/revoke")).toHaveLength(2);
     } finally {
@@ -276,7 +276,7 @@ keychainTest(
   async () => {
     const account = isolatedAccount();
     const before = productionMetadata();
-    const home = mkdtempSync(join(tmpdir(), "fx-oauth-keychain-failure-"));
+    const home = mkdtempSync(join(tmpdir(), "ax-oauth-keychain-failure-"));
     attachSystemKeychain(home);
     const issuer = startOAuthIssuer();
     const cleanup = () => deleteKeychainItem(account);

@@ -1524,7 +1524,7 @@ tmuxTest(
 );
 
 tmuxTest(
-  "repeated image-path paste cannot grow direct input past the cap and leaves fx alive",
+  "repeated image-path paste cannot grow direct input past the cap and leaves ax alive",
   async () => {
     const active = await startFx(120, 24);
     await active.pasteText(repeatedImagePaste(80));

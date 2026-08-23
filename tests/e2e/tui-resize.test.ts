@@ -63,7 +63,7 @@ async function createResizeSession(
   const env = { ...opts.env };
   let home = env.HOME;
   if (!home) {
-    const root = mkdtempSync(join(tmpdir(), "fx-resize-home-"));
+    const root = mkdtempSync(join(tmpdir(), "ax-resize-home-"));
     tempDirs.push(root);
     home = join(root, "home");
     env.HOME = home;
@@ -101,7 +101,7 @@ async function launchAt(
 }
 
 function createStderrPath(label: string): string {
-  const dir = mkdtempSync(join(tmpdir(), `fx-resize-${label}-`));
+  const dir = mkdtempSync(join(tmpdir(), `ax-resize-${label}-`));
   tempDirs.push(dir);
   return join(dir, "stderr.txt");
 }
@@ -116,7 +116,7 @@ async function launchRecordedSurfaceSession(
   stderrPath: string;
 }> {
   const root = realpathSync(
-    mkdtempSync(join(tmpdir(), `fx-footer-surface-${label}-`)),
+    mkdtempSync(join(tmpdir(), `ax-footer-surface-${label}-`)),
   );
   const home = join(root, "home");
   const workspace = join(root, "workspace");
@@ -652,7 +652,7 @@ function expectSkillsMenuGrid(
   expect(text).toContain("Fx");
   expect(text).toContain("Workspace");
   expect(text).toContain("Codex");
-  expect(text).toContain("Fx · Global");
+  expect(text).toContain("ax · Global");
   expect(names.some((name) => text.includes(name))).toBe(true);
   expect(text).not.toContain("Visible skills (");
   expect(text).not.toContain("Run /help for commands");
@@ -711,7 +711,7 @@ function createSkillFixture(
   descriptionPaddingRows = 0,
 ): LargeSkillFixture {
   const root = realpathSync(
-    mkdtempSync(join(tmpdir(), `fx-resize-${rootLabel}-${attempt}-`)),
+    mkdtempSync(join(tmpdir(), `ax-resize-${rootLabel}-${attempt}-`)),
   );
   const home = join(root, "home");
   const workspace = join(root, "workspace");
@@ -725,7 +725,7 @@ function createSkillFixture(
     const attemptSuffix = String(attempt).padStart(3, "0");
     const attemptName = `head-a${attemptSuffix}`;
     const name = `gauntlet-${attemptName}-skill-${suffix}`;
-    const marker = `fx-gauntlet-${attemptName}-${suffix}`;
+    const marker = `ax-gauntlet-${attemptName}-${suffix}`;
     const padding = Array.from(
       { length: descriptionPaddingRows },
       (_, row) => String.fromCharCode("a".charCodeAt(0) + row).repeat(120),
@@ -975,7 +975,7 @@ function startFileApprovalGateway() {
 }
 
 function createFileApprovalRoot() {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-resize-file-approval-")));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-resize-file-approval-")));
   const home = join(root, "home");
   const workspace = join(root, "workspace");
   mkdirSync(join(home, ".fx"), { recursive: true });
@@ -1477,7 +1477,7 @@ describe.skipIf(SKIP)("tui: resize", () => {
     "gated tmux setup failure cleans the session before releasing the command",
     async () => {
       session = await createResizeSession({ cmd: "sleep 120" });
-      const dir = mkdtempSync(join(tmpdir(), "fx-tmux-gate-failure-"));
+      const dir = mkdtempSync(join(tmpdir(), "ax-tmux-gate-failure-"));
       tempDirs.push(dir);
       const markerPath = join(dir, "command-ran");
       const before = matchingTestSessions();
@@ -1500,7 +1500,7 @@ describe.skipIf(SKIP)("tui: resize", () => {
     "settled resize replays a long assistant transcript from the header",
     async () => {
       const root = realpathSync(
-        mkdtempSync(join(tmpdir(), "fx-resize-long-transcript-")),
+        mkdtempSync(join(tmpdir(), "ax-resize-long-transcript-")),
       );
       const home = join(root, "home");
       const workspace = join(root, "workspace");
@@ -1577,7 +1577,7 @@ describe.skipIf(SKIP)("tui: resize", () => {
     "live command resize preserves current grouped scrollback while output is folded",
     async () => {
       const root = realpathSync(
-        mkdtempSync(join(tmpdir(), "fx-resize-live-command-scrollback-")),
+        mkdtempSync(join(tmpdir(), "ax-resize-live-command-scrollback-")),
       );
       const home = join(root, "home");
       const workspace = join(root, "workspace");
@@ -1663,7 +1663,7 @@ describe.skipIf(SKIP)("tui: resize", () => {
     "structured retention keeps native scrollback complete before resize",
     async () => {
       const root = realpathSync(
-        mkdtempSync(join(tmpdir(), "fx-retention-native-scrollback-")),
+        mkdtempSync(join(tmpdir(), "ax-retention-native-scrollback-")),
       );
       const home = join(root, "home");
       const workspace = join(root, "workspace");
@@ -1795,7 +1795,7 @@ describe.skipIf(SKIP)("tui: resize", () => {
       const testDeadline = Date.now() + TIMEOUT - TEST_TEARDOWN_HEADROOM_MS;
       const remainingTimeout = () => Math.max(0, testDeadline - Date.now());
       const root = realpathSync(
-        mkdtempSync(join(tmpdir(), "fx-resize-cancel-command-approval-")),
+        mkdtempSync(join(tmpdir(), "ax-resize-cancel-command-approval-")),
       );
       const home = join(root, "home");
       const workspace = join(root, "workspace");
@@ -1979,7 +1979,7 @@ describe.skipIf(SKIP)("tui: resize", () => {
     "semantic thematic rule reflows across a live tmux shrink and grow",
     async () => {
       const root = realpathSync(
-        mkdtempSync(join(tmpdir(), "fx-resize-thematic-rule-")),
+        mkdtempSync(join(tmpdir(), "ax-resize-thematic-rule-")),
       );
       const home = join(root, "home");
       const workspace = join(root, "workspace");
@@ -2064,7 +2064,7 @@ describe.skipIf(SKIP)("tui: resize", () => {
     "nested Markdown blockquote reflows across a live tmux shrink and grow",
     async () => {
       const root = realpathSync(
-        mkdtempSync(join(tmpdir(), "fx-resize-nested-blockquote-")),
+        mkdtempSync(join(tmpdir(), "ax-resize-nested-blockquote-")),
       );
       const home = join(root, "home");
       const workspace = join(root, "workspace");
@@ -2187,7 +2187,7 @@ describe.skipIf(SKIP)("tui: resize", () => {
     "gated assistant chunks remain ordered across shrink and grow",
     async () => {
       const root = realpathSync(
-        mkdtempSync(join(tmpdir(), "fx-resize-gated-stream-")),
+        mkdtempSync(join(tmpdir(), "ax-resize-gated-stream-")),
       );
       const home = join(root, "home");
       const workspace = join(root, "workspace");
@@ -2330,7 +2330,7 @@ describe.skipIf(SKIP)("tui: resize", () => {
     "visibly open slash picker adapts across shrink and grow without losing transcript state",
     async () => {
       const root = realpathSync(
-        mkdtempSync(join(tmpdir(), "fx-resize-open-picker-")),
+        mkdtempSync(join(tmpdir(), "ax-resize-open-picker-")),
       );
       const home = join(root, "home");
       const workspace = join(root, "workspace");
@@ -2479,7 +2479,7 @@ describe.skipIf(SKIP)("tui: resize", () => {
     "slash picker dismissal restores the resized short transcript boundary",
     async () => {
       const root = realpathSync(
-        mkdtempSync(join(tmpdir(), "fx-resize-short-picker-dismissal-")),
+        mkdtempSync(join(tmpdir(), "ax-resize-short-picker-dismissal-")),
       );
       const home = join(root, "home");
       const workspace = join(root, "workspace");
@@ -2742,7 +2742,7 @@ describe.skipIf(SKIP)("tui: resize", () => {
     "wide user card survives resize without splitting a terminal cell",
     async () => {
       const root = realpathSync(
-        mkdtempSync(join(tmpdir(), "fx-resize-wide-user-")),
+        mkdtempSync(join(tmpdir(), "ax-resize-wide-user-")),
       );
       const home = join(root, "home");
       const workspace = join(root, "workspace");
@@ -3433,7 +3433,7 @@ describe.skipIf(SKIP)("tui: resize", () => {
     "grow with immediate input retains pre-paint resize reconciliation",
     async () => {
       const root = realpathSync(
-        mkdtempSync(join(tmpdir(), "fx-resize-prepaint-input-")),
+        mkdtempSync(join(tmpdir(), "ax-resize-prepaint-input-")),
       );
       const home = join(root, "home");
       const workspace = join(root, "workspace");
@@ -3498,7 +3498,7 @@ describe.skipIf(SKIP)("tui: resize", () => {
         ["display-message", "-p", "-t", session.name, "#{pane_tty}"],
         { encoding: "utf8", stdio: "pipe" },
       ).trim();
-      // Drift the terminal position without updating fx's shadow grid. Tmux
+      // Drift the terminal position without updating ax's shadow grid. Tmux
       // can then answer the resize probe while reconciliation is still blocked.
       writeFileSync(paneTty, "\x1b[3A");
       await session.resizeWindow(120, 40, 0);
@@ -3612,7 +3612,7 @@ describe.skipIf(SKIP)("tui: resize", () => {
   test(
     "settled resize preserves a multi-megabyte bracketed paste byte-for-byte",
     async () => {
-      const dir = mkdtempSync(join(tmpdir(), "fx-resize-large-paste-"));
+      const dir = mkdtempSync(join(tmpdir(), "ax-resize-large-paste-"));
       tempDirs.push(dir);
       const tracePath = join(dir, "trace.log");
       const stderrPath = join(dir, "stderr.log");
@@ -3672,7 +3672,7 @@ describe.skipIf(SKIP)("tui: resize", () => {
   test(
     "tmux resize preserves column-one CPR-shaped paste bytes in the submitted prompt",
     async () => {
-      const dir = mkdtempSync(join(tmpdir(), "fx-resize-cpr-paste-"));
+      const dir = mkdtempSync(join(tmpdir(), "ax-resize-cpr-paste-"));
       tempDirs.push(dir);
       const tracePath = join(dir, "trace.log");
       const stderrPath = join(dir, "stderr.log");
@@ -3754,7 +3754,7 @@ describe.skipIf(SKIP)("tui: resize", () => {
   test(
     "probe-first resize keeps a terminal reply paste-owned",
     async () => {
-      const dir = mkdtempSync(join(tmpdir(), "fx-resize-cpr-paste-late-"));
+      const dir = mkdtempSync(join(tmpdir(), "ax-resize-cpr-paste-late-"));
       tempDirs.push(dir);
       const tracePath = join(dir, "trace.log");
       const stderrPath = join(dir, "stderr.log");
@@ -3865,7 +3865,7 @@ describe.skipIf(SKIP)("tui: resize", () => {
   test(
     "timed-out cursor probe does not leak a partial private CSI into later paste",
     async () => {
-      const dir = mkdtempSync(join(tmpdir(), "fx-resize-probe-timeout-"));
+      const dir = mkdtempSync(join(tmpdir(), "ax-resize-probe-timeout-"));
       tempDirs.push(dir);
       const tracePath = join(dir, "trace.log");
       const stderrPath = join(dir, "stderr.log");
@@ -3912,10 +3912,10 @@ describe.skipIf(SKIP)("tui: resize", () => {
   );
 
   test(
-    "settled resize clears pre-fx scrollback in both startup modes",
+    "settled resize clears pre-ax scrollback in both startup modes",
     async () => {
       for (const startupScrollback of [true, false]) {
-        const root = mkdtempSync(join(tmpdir(), "fx-resize-history-reset-"));
+        const root = mkdtempSync(join(tmpdir(), "ax-resize-history-reset-"));
         const home = join(root, "home");
         const workspace = join(root, "workspace");
         const marker = `PRE_FX_MARKER_${startupScrollback ? "ON" : "OFF"}_6179`;
@@ -3966,7 +3966,7 @@ describe.skipIf(SKIP)("tui: resize", () => {
   test(
     "idle theme monitoring stays silent and notifications retint the transcript once",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-theme-reset-replay-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-theme-reset-replay-"));
       const home = join(root, "home");
       const workspace = join(root, "workspace");
       const tracePath = join(root, "trace.log");

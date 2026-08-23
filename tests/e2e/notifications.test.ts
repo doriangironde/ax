@@ -27,7 +27,7 @@ const COMMAND_APPROVAL_PROMPT = "Would you like to run the following command?";
 function createNotificationRoot(
   notifications = { turn_end: true, attention_required: true },
 ) {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-notifications-")));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-notifications-")));
   const home = join(root, "home");
   const workspace = join(root, "workspace");
   const profile = join(home, ".fx");
@@ -187,7 +187,7 @@ test.skipIf(!tmuxAvailable())(
       );
 
       expect(handlerStartCount(trace, "PostTurnEnd")).toBe(1);
-      expect(trace).toContain("handler=fx.sound.turn_end");
+      expect(trace).toContain("handler=ax.sound.turn_end");
       expect(readFileSync(stderrPath, "utf8")).toBe("");
     } finally {
       if (session) await session.kill();
@@ -225,7 +225,7 @@ test.skipIf(!tmuxAvailable())(
       );
 
       expect(handlerStartCount(trace, "PostTurnEnd")).toBe(1);
-      expect(trace).toContain("handler=fx.sound.turn_end");
+      expect(trace).toContain("handler=ax.sound.turn_end");
       expect(readFileSync(stderrPath, "utf8")).toBe("");
     } finally {
       if (session) await session.kill();
@@ -237,7 +237,7 @@ test.skipIf(!tmuxAvailable())(
 );
 
 test(
-  "fx ask keeps redirected stdout JSON and stderr byte-clean with notifications enabled",
+  "ax ask keeps redirected stdout JSON and stderr byte-clean with notifications enabled",
   async () => {
     const fixture = createNotificationRoot();
     const gateway = startFakeGateway([
@@ -271,7 +271,7 @@ test(
 );
 
 test.skipIf(!tmuxAvailable())(
-  "fx ask correlates permission attention and turn-end notifications",
+  "ax ask correlates permission attention and turn-end notifications",
   async () => {
     const fixture = createNotificationRoot();
     const marker = join(fixture.workspace, "ask-permission-marker.txt");
@@ -357,7 +357,7 @@ test.skipIf(!tmuxAvailable())(
       );
 
       expect(handlerStartCount(waitingTrace, "AttentionRequired")).toBe(1);
-      expect(waitingTrace).toContain("handler=fx.sound.attention_required");
+      expect(waitingTrace).toContain("handler=ax.sound.attention_required");
       expect(existsSync(marker)).toBe(false);
       await waitForBellCount(paneOutputPath, 1);
       await Bun.sleep(250);

@@ -130,7 +130,7 @@ describe.skipIf(SKIP)("tui: logical-line deletion", () => {
     "all decoded and raw routes preserve surrounding logical lines",
     async () => {
       for (const route of routes) {
-        const workDir = mkdtempSync(join(tmpdir(), "fx-line-delete-"));
+        const workDir = mkdtempSync(join(tmpdir(), "ax-line-delete-"));
         workDirs.push(workDir);
         const stderrPath = join(workDir, "stderr.log");
         writeFileSync(stderrPath, "");
@@ -182,7 +182,7 @@ describe.skipIf(SKIP)("tui: logical-line deletion", () => {
           );
         }
         if (!session.isAlive()) {
-          failures.push(`${route.label}: fx process is not alive`);
+          failures.push(`${route.label}: ax process is not alive`);
         }
         const stderr = readFileSync(stderrPath, "utf8");
         if (stderr.length !== 0) {

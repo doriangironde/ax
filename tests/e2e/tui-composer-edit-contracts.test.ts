@@ -53,7 +53,7 @@ async function startFx(
   duplicateReview = false,
   traceScopes?: string,
 ): Promise<TmuxSession> {
-  root = realpathSync(mkdtempSync(join(tmpdir(), "fx-edit-contracts-")));
+  root = realpathSync(mkdtempSync(join(tmpdir(), "ax-edit-contracts-")));
   const home = join(root, "home");
   const workspace = join(root, "workspace");
   mkdirSync(join(home, ".fx"), { recursive: true });

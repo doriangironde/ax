@@ -429,7 +429,7 @@ describe("@ file picker", () => {
   tmuxTest(
     "keeps the completed result visible through rapid large-index refreshes",
     async () => {
-      const current = createFixture("fx-file-picker-stable-refresh-");
+      const current = createFixture("ax-file-picker-stable-refresh-");
       const artifactDir = process.env.FX_FILE_PICKER_LIFECYCLE_ARTIFACT_DIR;
       const fixtureStartedAt = performance.now();
       let fixtureFileCount = 0;
@@ -1073,7 +1073,7 @@ describe("@ file picker", () => {
   tmuxTest(
     "refreshes a completed startup index on the first picker episode",
     async () => {
-      const current = createFixture("fx-file-picker-first-episode-refresh-");
+      const current = createFixture("ax-file-picker-first-episode-refresh-");
       initGit(current.workspace);
       writeFileSync(join(current.workspace, "startup-visible.txt"), "startup");
       git(current.workspace, "add", "startup-visible.txt");
@@ -1101,7 +1101,7 @@ describe("@ file picker", () => {
   tmuxTest(
     "submits an unmatched file mention without requiring dismissal",
     async () => {
-      const current = createFixture("fx-file-picker-unmatched-submit-");
+      const current = createFixture("ax-file-picker-unmatched-submit-");
       const active = await startMockFx(current, [
         fakeGatewayFinalText("UNMATCHED_FILE_PROMPT_OK"),
       ]);
@@ -1127,7 +1127,7 @@ describe("@ file picker", () => {
   tmuxTest(
     "opens after quotes and parentheses and submits the selected path",
     async () => {
-      const current = createFixture("fx-file-picker-boundaries-");
+      const current = createFixture("ax-file-picker-boundaries-");
       initGit(current.workspace);
       mkdirSync(join(current.workspace, "src"));
       writeFileSync(join(current.workspace, "src", "main.zig"), "fixture");
@@ -1161,7 +1161,7 @@ describe("@ file picker", () => {
   tmuxTest(
     "keeps shared-prefix paths distinguishable at narrow widths",
     async () => {
-      const current = createFixture("fx-file-picker-narrow-prefix-");
+      const current = createFixture("ax-file-picker-narrow-prefix-");
       initGit(current.workspace);
       const directory = join(
         current.workspace,
@@ -1199,7 +1199,7 @@ describe("@ file picker", () => {
   tmuxTest(
     "keeps duplicate basenames distinguishable at narrow widths",
     async () => {
-      const current = createFixture("fx-file-picker-duplicate-basename-");
+      const current = createFixture("ax-file-picker-duplicate-basename-");
       initGit(current.workspace);
       const basename = "shared-component-id-with-a-very-long-name.zig";
       const directories = [
@@ -1239,7 +1239,7 @@ describe("@ file picker", () => {
   tmuxTest(
     "workspace mutation exposes absolute added-root files and directories",
     async () => {
-      const current = createFixture("fx-file-picker-added-root-");
+      const current = createFixture("ax-file-picker-added-root-");
       const shared = join(current.root, "shared");
       mkdirSync(join(shared, "added-root-directory"), { recursive: true });
       const sharedRoot = realpathSync(shared);
@@ -1283,7 +1283,7 @@ describe("@ file picker", () => {
   tmuxTest(
     "shows a 50k result and releases zero-match Enter after dismissal",
     async () => {
-      const current = createFixture("fx-file-picker-repaint-");
+      const current = createFixture("ax-file-picker-repaint-");
       for (let index = 0; index < 50_000; index += 1) {
         writeFileSync(
           join(current.workspace, `bulk-${index.toString().padStart(5, "0")}.txt`),
@@ -1331,7 +1331,7 @@ describe("@ file picker", () => {
   tmuxTest(
     "updates tracked and untracked membership while preserving ignores",
     async () => {
-      const current = createFixture("fx-file-picker-refresh-");
+      const current = createFixture("ax-file-picker-refresh-");
       initGit(current.workspace);
       writeFileSync(join(current.workspace, ".gitignore"), "ignored.txt\n");
       writeFileSync(join(current.workspace, "tracked.txt"), "tracked");
@@ -1394,7 +1394,7 @@ describe("@ file picker", () => {
   tmuxTest(
     "omits unsafe filenames while Unicode matches remain selectable",
     async () => {
-      const current = createFixture("fx-file-picker-safety-");
+      const current = createFixture("ax-file-picker-safety-");
       initGit(current.workspace);
       const unsafe = "evil-\x1b[2J.txt";
       writeFileSync(join(current.workspace, unsafe), "unsafe");
@@ -1423,7 +1423,7 @@ describe("@ file picker", () => {
   tmuxTest(
     "renders and accepts fuzzy results across typed file kind changes",
     async () => {
-      const current = createFixture("fx-file-picker-typed-integration-");
+      const current = createFixture("ax-file-picker-typed-integration-");
       initGit(current.workspace);
       writeFileSync(
         join(current.workspace, ".gitignore"),
@@ -1557,7 +1557,7 @@ describe("@ file picker", () => {
   tmuxTest(
     "browses current, parent, home, and absolute filesystem paths",
     async () => {
-      const current = createFixture("fx-file-picker-filesystem-");
+      const current = createFixture("ax-file-picker-filesystem-");
       initGit(current.workspace);
       mkdirSync(join(current.workspace, "empty-workspace"));
       mkdirSync(join(current.workspace, "filled-dir"));
@@ -1673,7 +1673,7 @@ describe("@ file picker", () => {
   tmuxTest(
     "claims a typed separator after end completion without duplicating it",
     async () => {
-      const current = createFixture("fx-file-picker-owned-spacing-");
+      const current = createFixture("ax-file-picker-owned-spacing-");
       initGit(current.workspace);
       writeFileSync(join(current.workspace, "AGENTS.md"), "agents");
       writeFileSync(join(current.workspace, "README.md"), "readme");
@@ -1706,7 +1706,7 @@ describe("@ file picker", () => {
   tmuxTest(
     "middle completion preserves one separator and submits the exact prompt",
     async () => {
-      const current = createFixture("fx-file-picker-spacing-");
+      const current = createFixture("ax-file-picker-spacing-");
       initGit(current.workspace);
       writeFileSync(join(current.workspace, "first-file.txt"), "first");
       git(current.workspace, "add", "first-file.txt");
@@ -1735,7 +1735,7 @@ describe("@ file picker", () => {
   tmuxTest(
     "persists a selected plain-text path across two process resume cycles",
     async () => {
-      const current = createFixture("fx-file-picker-resume-");
+      const current = createFixture("ax-file-picker-resume-");
       initGit(current.workspace);
       writeFileSync(
         join(current.workspace, "resume-context.txt"),
@@ -1840,7 +1840,7 @@ describe("@ file picker", () => {
   liveTmuxTest(
     "browses a home path and submits through the live Gateway",
     async () => {
-      const current = createFixture("fx-file-picker-live-");
+      const current = createFixture("ax-file-picker-live-");
       initGit(current.workspace);
       mkdirSync(join(current.home, "live space"));
       writeFileSync(

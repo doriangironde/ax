@@ -212,7 +212,7 @@ afterEach(async () => {
 });
 
 function createFixture() {
-  root = realpathSync(mkdtempSync(join(tmpdir(), "fx-subagent-manager-")));
+  root = realpathSync(mkdtempSync(join(tmpdir(), "ax-subagent-manager-")));
   const home = join(root, "home");
   const workspace = join(root, "workspace");
   const stderrPath = join(root, "stderr.log");

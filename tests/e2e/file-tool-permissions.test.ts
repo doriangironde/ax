@@ -45,7 +45,7 @@ function createIsolatedRoot(prefix: string) {
 
 function parseFxJson(result: { stdout: string; stderr: string; code: number | null }): FxJson {
   if (result.code !== 0) {
-    throw new Error(`fx exited ${result.code}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`);
+    throw new Error(`ax exited ${result.code}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`);
   }
   return JSON.parse(result.stdout.trim()) as FxJson;
 }
@@ -83,9 +83,9 @@ async function runWithFakeGateway(
 
 describe("external file permissions", () => {
   test(
-    "fx ask --yolo bypasses a configured write denial without a classifier request",
+    "ax ask --yolo bypasses a configured write denial without a classifier request",
     async () => {
-      const root = createIsolatedRoot("fx-yolo-permissions-");
+      const root = createIsolatedRoot("ax-yolo-permissions-");
       try {
         const target = join(root.external, "yolo-write.txt");
         const tracePath = join(root.root, "permission-trace.log");
@@ -123,7 +123,7 @@ describe("external file permissions", () => {
         );
 
         expect(result.stderr).toContain(
-          "YOLO enabled: fx permission checks disabled",
+          "YOLO enabled: ax permission checks disabled",
         );
         const output = parseFxJson(result);
         expect(
@@ -148,9 +148,9 @@ describe("external file permissions", () => {
   );
 
   test(
-    "fx ask reads external paths and exercises classifier and rule-gated writes",
+    "ax ask reads external paths and exercises classifier and rule-gated writes",
     async () => {
-      const root = createIsolatedRoot("fx-file-permissions-");
+      const root = createIsolatedRoot("ax-file-permissions-");
       try {
         const readTarget = join(root.external, "read-fixture.txt");
         const classifiedTarget = join(root.external, "classified-write.txt");

@@ -205,7 +205,7 @@ function gatewayEnv(
 }
 
 function makeRoot(label: string): StressRoot {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), `fx-ctrl-o-${label}-`)));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), `ax-ctrl-o-${label}-`)));
   return {
     root,
     home: join(root, "home"),
@@ -548,8 +548,8 @@ function findFxProcessId(rows: readonly string[]): number | undefined {
   return undefined;
 }
 
-test("Fx process discovery accepts basename and path process names", () => {
-  expect(findFxProcessId(["11361 fx"])).toBe(11361);
+test("Ax process discovery accepts basename and path process names", () => {
+  expect(findFxProcessId(["11361 ax"])).toBe(11361);
   expect(findFxProcessId(["11362 /workspace/zig-out/bin/ax"])).toBe(11362);
 });
 

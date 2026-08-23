@@ -12,7 +12,7 @@ const NO_GATEWAY_AUTH = {
 };
 
 async function runWithoutGatewayAuth(args: string[]) {
-  const root = mkdtempSync(join(tmpdir(), "fx-web-search-no-auth-"));
+  const root = mkdtempSync(join(tmpdir(), "ax-web-search-no-auth-"));
   const home = join(root, "home");
   const workspace = join(root, "workspace");
   mkdirSync(home);
@@ -43,7 +43,7 @@ describe("web_search permission progress", () => {
       ]);
 
       expect(result.code).toBe(1);
-      expect(result.stderr).toContain("Fx needs access to Vercel AI Gateway. Run fx login to sign in, fx setup to use an API key, or set AI_GATEWAY_API_KEY.");
+      expect(result.stderr).toContain("ax needs access to Vercel AI Gateway. Run ax login to sign in, ax setup to use an API key, or set AI_GATEWAY_API_KEY.");
       expectNoSearchProgress(result.stderr);
     },
     TIMEOUT,

@@ -127,7 +127,7 @@ describe("session recovery", () => {
     test(
       `process death at ${boundary} leaves an uncommitted orphan`,
       async () => {
-        const root = mkdtempSync(join(tmpdir(), "fx-session-pre-authority-"));
+        const root = mkdtempSync(join(tmpdir(), "ax-session-pre-authority-"));
         try {
           const home = join(root, "home");
           const workspace = join(root, "workspace");
@@ -182,7 +182,7 @@ describe("session recovery", () => {
     test(
       `writable load confirms proposed authority after ${boundary}`,
       async () => {
-        const root = mkdtempSync(join(tmpdir(), "fx-session-post-authority-"));
+        const root = mkdtempSync(join(tmpdir(), "ax-session-post-authority-"));
         try {
           const home = join(root, "home");
           const workspace = join(root, "workspace");
@@ -232,7 +232,7 @@ describe("session recovery", () => {
   }
 
   test("doctor removes only a validated noncurrent watermark", async () => {
-    const root = mkdtempSync(join(tmpdir(), "fx-session-doctor-cleanup-"));
+    const root = mkdtempSync(join(tmpdir(), "ax-session-doctor-cleanup-"));
     try {
       const home = join(root, "home");
       const workspace = join(root, "workspace");
@@ -268,7 +268,7 @@ describe("session recovery", () => {
   });
 
   test("session recover copies a corrupt-watermark session without changing its source", async () => {
-    const root = mkdtempSync(join(tmpdir(), "fx-session-copy-recovery-"));
+    const root = mkdtempSync(join(tmpdir(), "ax-session-copy-recovery-"));
     try {
       const home = join(root, "home");
       const workspace = join(root, "workspace");
@@ -310,7 +310,7 @@ describe("session recovery", () => {
       });
       expect(doctor.code).toBe(0);
       expect(doctor.stdout).toContain("commit_watermark_invalid");
-      expect(doctor.stdout).toContain(`fx session recover ${sessionId}`);
+      expect(doctor.stdout).toContain(`ax session recover ${sessionId}`);
 
       const recovery = await runFx(
         ["session", "recover", sessionId, "--json"],
@@ -383,7 +383,7 @@ describe("session recovery", () => {
       expect(JSON.parse(sourceDetail.stdout)).toEqual(
         expect.objectContaining({
           code: "InvalidSessionFormat",
-          error: `session ${sessionId} is corrupt; run \`fx session recover ${sessionId}\``,
+          error: `session ${sessionId} is corrupt; run \`ax session recover ${sessionId}\``,
         }),
       );
     } finally {
@@ -392,7 +392,7 @@ describe("session recovery", () => {
   });
 
   test("cross-workspace recovery preserves both resume-last pointers", async () => {
-    const root = mkdtempSync(join(tmpdir(), "fx-session-cross-workspace-recovery-"));
+    const root = mkdtempSync(join(tmpdir(), "ax-session-cross-workspace-recovery-"));
     try {
       const home = join(root, "home");
       const workspaceA = join(root, "workspace-a");
@@ -466,7 +466,7 @@ describe("session recovery", () => {
   test(
     "process death after authority intent leaves a fenced orphan for writable resolution",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-session-recovery-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-session-recovery-"));
       try {
         const home = join(root, "home");
         const workspace = join(root, "workspace");
@@ -570,7 +570,7 @@ describe("session recovery", () => {
     test(
       `model commit recovers after process death at ${boundary}`,
       async () => {
-        const root = mkdtempSync(join(tmpdir(), "fx-session-commit-"));
+        const root = mkdtempSync(join(tmpdir(), "ax-session-commit-"));
         try {
           const home = join(root, "home");
           const workspace = join(root, "workspace");

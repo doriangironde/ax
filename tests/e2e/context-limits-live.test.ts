@@ -12,7 +12,7 @@ describe.skipIf(!LIVE_ENABLED || !HAS_API_KEY)("live source context limits", () 
   test(
     "fresh binary sends a bounded real Gateway request and returns normally",
     async () => {
-      const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-context-limits-live-")));
+      const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-context-limits-live-")));
       const home = join(root, "home");
       const workspace = join(root, "workspace");
       const skillDirectory = join(

@@ -247,7 +247,7 @@ function startImageGateway(
 }
 
 function createIsolatedRoot() {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-vision-route-e2e-")));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-vision-route-e2e-")));
   const home = join(root, "home");
   const workspace = join(root, "workspace");
   mkdirSync(join(home, ".fx"), { recursive: true });
@@ -555,7 +555,7 @@ function toolResultText(body: string, toolCallId: string): string {
 
 describe("Vision route fake Gateway", () => {
   test(
-    "fx ask rejects missing images before Gateway startup in text and JSON modes",
+    "ax ask rejects missing images before Gateway startup in text and JSON modes",
     async () => {
       const root = createIsolatedRoot();
       const gateway = startImageGateway([]);
@@ -657,7 +657,7 @@ describe("Vision route fake Gateway", () => {
   );
 
   test(
-    "fx ask gates GLM images through Vision without leaking paths",
+    "ax ask gates GLM images through Vision without leaking paths",
     async () => {
       const root = createIsolatedRoot();
       const fixture = createScopedImageFixture(root);
@@ -716,7 +716,7 @@ describe("Vision route fake Gateway", () => {
   );
 
   test(
-    "fx ask recovers when the model rejects the post-Vision prompt as assistant prefill",
+    "ax ask recovers when the model rejects the post-Vision prompt as assistant prefill",
     async () => {
       const root = createIsolatedRoot();
       const fixture = createScopedImageFixture(root);
@@ -780,13 +780,13 @@ describe("Vision route fake Gateway", () => {
   );
 
   test(
-    "fx ask executes path-source Vision and cleans transient snapshots without failure telemetry",
+    "ax ask executes path-source Vision and cleans transient snapshots without failure telemetry",
     async () => {
       const root = createIsolatedRoot();
       const imagePath = join(root.workspace, "path-source.png");
       const tracePath = join(root.root, "trace.log");
       const snapshotsBefore = readdirSync("/tmp")
-        .filter((name) => name.startsWith("fx-image-snapshots-"))
+        .filter((name) => name.startsWith("ax-image-snapshots-"))
         .sort();
       writeMarkedImage(imagePath, "HEADLESS_PATH_SOURCE");
       const gateway = startImageGateway([
@@ -830,7 +830,7 @@ describe("Vision route fake Gateway", () => {
         expect(readFileSync(tracePath, "utf8")).not.toContain("snapshot_cleanup_failed");
         expect(
           readdirSync("/tmp")
-            .filter((name) => name.startsWith("fx-image-snapshots-"))
+            .filter((name) => name.startsWith("ax-image-snapshots-"))
             .sort(),
         ).toEqual(snapshotsBefore);
       } finally {
@@ -951,7 +951,7 @@ describe("Vision route fake Gateway", () => {
           for (const request of gateway.chatRequests) {
             for (const imagePath of fixture.paths) expect(request.body).not.toContain(imagePath);
             expect(request.body).not.toContain("data:image");
-            expect(request.body).not.toContain("fx-image-snapshots");
+            expect(request.body).not.toContain("ax-image-snapshots");
             expect(request.body).not.toContain(".fx/sessions");
           }
         } finally {
@@ -1021,7 +1021,7 @@ describe("Vision route fake Gateway", () => {
   );
 
   test(
-    "fx ask preserves native image parts for Gemini",
+    "ax ask preserves native image parts for Gemini",
     async () => {
       const root = createIsolatedRoot();
       const fixture = createScopedImageFixture(root);
@@ -1062,7 +1062,7 @@ describe("Vision route fake Gateway", () => {
   );
 
   test(
-    "fx ask normalizes encoded-oversized native images on macOS and rejects elsewhere",
+    "ax ask normalizes encoded-oversized native images on macOS and rejects elsewhere",
     async () => {
       const root = createIsolatedRoot();
       const oversizedPath = join(root.workspace, "encoded-oversized.png");
@@ -1373,7 +1373,7 @@ describe("Vision route fake Gateway", () => {
   );
 
   test(
-    "fx ask applies image_adapter_output_bytes to Vision provider capture",
+    "ax ask applies image_adapter_output_bytes to Vision provider capture",
     async () => {
       const root = createIsolatedRoot();
       const fixture = createScopedImageFixture(root);
@@ -2772,7 +2772,7 @@ describe("Vision route fake Gateway", () => {
         await session.sendText(rootRequest);
         await session.waitForText("Would you like to allow this action?", TIMEOUT);
         await session.sendKeys("Tab");
-        await session.waitForText("Yes, and tell fx what to do next", TIMEOUT);
+        await session.waitForText("Yes, and tell ax what to do next", TIMEOUT);
         await session.sendLiteralText(feedback);
         await session.waitForText(`Yes, ${feedback}`, TIMEOUT);
         await session.sendKeys("Enter");

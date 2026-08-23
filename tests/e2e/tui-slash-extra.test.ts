@@ -51,7 +51,7 @@ describe.skipIf(!tmuxAvailable())("tui: skills command recovery", () => {
   test(
     "invalid /skills create name reports an inline error and preserves the session",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-invalid-skill-name-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-invalid-skill-name-"));
       const home = join(root, "home");
       const stderrPath = join(root, "stderr.log");
       mkdirSync(home);
@@ -76,7 +76,7 @@ describe.skipIf(!tmuxAvailable())("tui: skills command recovery", () => {
         expect(existsSync(join(home, ".fx", "escape-attempt"))).toBe(false);
 
         await session.sendText("/skills path");
-        const recovered = await session.waitForText("fx managed install root:", 5_000);
+        const recovered = await session.waitForText("ax managed install root:", 5_000);
         expect(hasEmptyComposer(recovered)).toBe(true);
         expect(readFileSync(stderrPath, "utf8")).toBe("");
       } finally {
@@ -178,7 +178,7 @@ describe.skipIf(!tmuxAvailable() || CLIPBOARD_PROGRAM === null)("tui: clipboard 
     async () => {
       if (CLIPBOARD_PROGRAM === null) throw new Error("unsupported clipboard platform");
 
-      const workDir = mkdtempSync(join(tmpdir(), "fx-clipboard-host-"));
+      const workDir = mkdtempSync(join(tmpdir(), "ax-clipboard-host-"));
       const homeDir = join(workDir, "home");
       const binDir = join(workDir, "bin");
       const capturePath = join(workDir, "clipboard.txt");
@@ -238,8 +238,8 @@ describe.skipIf(!tmuxAvailable())("tui: active session transitions", () => {
   test(
     "active /clear cancels a fake Gateway turn and accepts a follow-up prompt",
     async () => {
-      const workDir = mkdtempSync(join(tmpdir(), "fx-active-clear-"));
-      const homeDir = mkdtempSync(join(tmpdir(), "fx-active-clear-home-"));
+      const workDir = mkdtempSync(join(tmpdir(), "ax-active-clear-"));
+      const homeDir = mkdtempSync(join(tmpdir(), "ax-active-clear-home-"));
       const stderrPath = join(workDir, "stderr.log");
       let requestCount = 0;
       const gateway = startDynamicFakeGateway(() => {
@@ -309,8 +309,8 @@ describe.skipIf(SKIP)("tui: extra slash commands", () => {
   test(
     "/clear resets projected history before the next prompt",
     async () => {
-      const workDir = mkdtempSync(join(tmpdir(), "fx-row03-clear-"));
-      const homeDir = mkdtempSync(join(tmpdir(), "fx-row03-clear-home-"));
+      const workDir = mkdtempSync(join(tmpdir(), "ax-row03-clear-"));
+      const homeDir = mkdtempSync(join(tmpdir(), "ax-row03-clear-home-"));
       const tracePath = join(workDir, "trace.log");
       mkdirSync(join(homeDir, ".fx"), { recursive: true });
       writeFileSync(
@@ -404,7 +404,7 @@ describe.skipIf(SKIP)("tui: extra slash commands", () => {
   test(
     "/usage and /cost open the same compact local usage dashboard",
     async () => {
-      const home = mkdtempSync(join(tmpdir(), "fx-usage-empty-home-"));
+      const home = mkdtempSync(join(tmpdir(), "ax-usage-empty-home-"));
       session = await TmuxSession.create({ env: { HOME: home } });
       await session.waitForComposer(10_000);
       await session.sendText("/cost");

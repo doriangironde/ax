@@ -49,7 +49,7 @@ function createIsolatedRoot(prefix: string) {
 
 function parseFxJson(result: { stdout: string; stderr: string; code: number | null }): FxJson {
   if (result.code !== 0) {
-    throw new Error(`fx exited ${result.code}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`);
+    throw new Error(`ax exited ${result.code}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`);
   }
   return JSON.parse(result.stdout.trim()) as FxJson;
 }
@@ -99,7 +99,7 @@ async function waitForPaneExit(
     await Bun.sleep(25);
   }
   throw new Error(
-    `Timed out waiting for fx ask to exit.\n${await session.captureFullScrollback()}`,
+    `Timed out waiting for ax ask to exit.\n${await session.captureFullScrollback()}`,
   );
 }
 
@@ -108,7 +108,7 @@ async function runTtyPromptPermissionsCase(
   decision: "approve" | "deny",
 ) {
   const root = createIsolatedRoot(
-    `fx-${outputMode}-prompt-permissions-${decision}-`,
+    `ax-${outputMode}-prompt-permissions-${decision}-`,
   );
   const marker = join(root.workspace, `${decision}-marker.txt`);
   const stdoutPath = join(root.root, `${decision}.stdout`);
@@ -133,7 +133,7 @@ async function runTtyPromptPermissionsCase(
       remainOnExit: true,
     });
     const prompt = await session.waitForText("Approve? [y/N]", TIMEOUT);
-    expect(prompt).toContain("fx wants to run:");
+    expect(prompt).toContain("ax wants to run:");
     expect(existsSync(marker)).toBe(false);
     await session.sendText(decision === "approve" ? "y" : "n");
     await waitForPaneExit(session, 0);
@@ -165,7 +165,7 @@ describe("generic permission typed errors", () => {
   test(
     "returns typed JSON for denied terminal",
     async () => {
-      const root = createIsolatedRoot("fx-permission-error-");
+      const root = createIsolatedRoot("ax-permission-error-");
       const marker = join(root.workspace, "denied-marker.txt");
       const toolCallId = "permission_denied_call";
       const gateway = startFakeGateway([
@@ -240,7 +240,7 @@ describe("generic permission typed errors", () => {
   test.skipIf(!tmuxAvailable())(
     "JSON prompt-permissions does not prompt after automatic recovery exhaustion",
     async () => {
-      const root = createIsolatedRoot("fx-json-auto-prompt-permissions-");
+      const root = createIsolatedRoot("ax-json-auto-prompt-permissions-");
       const markers = Array.from(
         { length: 4 },
         (_, index) => join(root.workspace, `auto-marker-${index + 1}.txt`),
@@ -326,7 +326,7 @@ describe("generic permission typed errors", () => {
 
       for (const testCase of cases) {
         const root = createIsolatedRoot(
-          `fx-${testCase.mode}-${testCase.optIn ? "opt-in" : "default"}-non-tty-`,
+          `ax-${testCase.mode}-${testCase.optIn ? "opt-in" : "default"}-non-tty-`,
         );
         const marker = join(root.workspace, "must-not-run.txt");
         writeFileSync(

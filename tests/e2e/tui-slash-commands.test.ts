@@ -21,7 +21,7 @@ afterEach(async () => {
 });
 
 async function launchAndWait(): Promise<TmuxSession> {
-  const root = mkdtempSync(join(tmpdir(), "fx-slash-commands-"));
+  const root = mkdtempSync(join(tmpdir(), "ax-slash-commands-"));
   const home = join(root, "home");
   const workspace = join(root, "workspace");
   mkdirSync(home);
@@ -39,7 +39,7 @@ async function launchNoKeyAndWait(): Promise<{
   terminal: TmuxSession;
   stderrPath: string;
 }> {
-  const root = mkdtempSync(join(tmpdir(), "fx-slash-commands-no-key-"));
+  const root = mkdtempSync(join(tmpdir(), "ax-slash-commands-no-key-"));
   const home = join(root, "home");
   const workspace = join(root, "workspace");
   const stderrPath = join(root, "stderr.log");
@@ -103,7 +103,7 @@ describe.skipIf(TMUX_SKIP)("tui: no-key slash commands", () => {
   test(
     "compact status notice preserves native scrollback",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-status-compact-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-status-compact-"));
       const home = join(root, "home");
       const workspace = join(root, "workspace");
       const stderrPath = join(root, "stderr.log");

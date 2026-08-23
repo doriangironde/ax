@@ -87,7 +87,7 @@ describe.skipIf(!tmuxAvailable())("prompt history", () => {
   serialTest(
     "accepted prompts and slash commands survive restart",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-prompt-history-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-prompt-history-"));
       try {
         const home = join(root, "home");
         const workspace = join(root, "workspace");
@@ -157,7 +157,7 @@ describe.skipIf(!tmuxAvailable())("prompt history", () => {
   serialTest(
     "read-only prompt-history bootstrap does not create state in an unwritable home",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-prompt-history-no-create-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-prompt-history-no-create-"));
       try {
         const home = join(root, "home");
         const workspace = join(root, "workspace");
@@ -188,7 +188,7 @@ describe.skipIf(!tmuxAvailable())("prompt history", () => {
   serialTest(
     "recording can be disabled from settings",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-prompt-history-scope-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-prompt-history-scope-"));
       try {
         const home = join(root, "home");
         const workspaceA = join(root, "workspace-a");
@@ -300,7 +300,7 @@ describe.skipIf(!tmuxAvailable())("prompt history", () => {
   serialTest(
     "startup scans beyond one mebibyte of newer interleaved workspace records",
     async () => {
-      const root = mkdtempSync(join(tmpdir(), "fx-prompt-history-large-"));
+      const root = mkdtempSync(join(tmpdir(), "ax-prompt-history-large-"));
       try {
         const home = join(root, "home");
         const workspaceA = join(root, "workspace-a");

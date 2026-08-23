@@ -43,7 +43,7 @@ function livePrompt(run: number, step: number): { prompt: string; marker: string
 }
 
 async function launch(run: number): Promise<{ session: TmuxSession; tracePath: string }> {
-  const workDir = mkdtempSync(join(tmpdir(), `fx-render-live-stress-${run}-`));
+  const workDir = mkdtempSync(join(tmpdir(), `ax-render-live-stress-${run}-`));
   workDirs.push(workDir);
   const tracePath = join(workDir, "trace.log");
 

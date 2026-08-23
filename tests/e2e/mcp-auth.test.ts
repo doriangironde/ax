@@ -530,7 +530,7 @@ function createRoot(
   serverUrl = activeAuth.url,
   followAuthorization = true,
 ) {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-mcp-auth-")));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-mcp-auth-")));
   cleanupRoot = root;
   const home = join(root, "home");
   const workspace = join(root, "workspace");
@@ -555,7 +555,7 @@ function createRoot(
           ...(configureOauth
             ? {
                 oauth: {
-                  client_id: "fx-mcp-auth-test",
+                  client_id: "ax-mcp-auth-test",
                   scopes: ["tools.read"],
                 },
               }
@@ -612,7 +612,7 @@ function seedExpiredCredentials(
         endpoint,
         resource: endpoint,
         issuer: origin,
-        client_id: "fx-mcp-auth-test",
+        client_id: "ax-mcp-auth-test",
         client_secret: null,
         access_token: ACCESS_INITIAL,
         refresh_token: REFRESH_INITIAL,
@@ -720,8 +720,8 @@ function preserveAuthFailure(
 ): void {
   if (result.code === 0) return;
   cleanupRoot = null;
-  writeFileSync(join(root.root, "fx-stdout.log"), result.stdout);
-  writeFileSync(join(root.root, "fx-stderr.log"), result.stderr);
+  writeFileSync(join(root.root, "ax-stdout.log"), result.stdout);
+  writeFileSync(join(root.root, "ax-stderr.log"), result.stderr);
   writeFileSync(
     join(root.root, "failure.json"),
     JSON.stringify({
@@ -744,7 +744,7 @@ function preserveAuthFailure(
       gatewayRequests: activeGateway.requests.map((request) => request.body),
     }, null, 2),
   );
-  throw new Error(`fx ${label} failed; retained artifacts: ${root.root}`);
+  throw new Error(`ax ${label} failed; retained artifacts: ${root.root}`);
 }
 
 async function preserveAuthTuiFailure(
@@ -770,7 +770,7 @@ async function preserveAuthTuiFailure(
       gatewayRequests: gateway?.requests.map((request) => request.body) ?? [],
     }, null, 2),
   );
-  throw new Error(`fx ${label} failed; retained artifacts: ${root.root}`);
+  throw new Error(`ax ${label} failed; retained artifacts: ${root.root}`);
 }
 
 describe("MCP remote authentication lifecycle", () => {
@@ -1456,7 +1456,7 @@ describe("MCP remote authentication lifecycle", () => {
   }
 
   test(
-    "fx ask isolates failed-server authentication from healthy tool search",
+    "ax ask isolates failed-server authentication from healthy tool search",
     async () => {
       upstream = startModernMcpHttpFixture("json");
       auth = startAuthFixture(upstream.url);
@@ -1475,7 +1475,7 @@ describe("MCP remote authentication lifecycle", () => {
               type: "http",
               url: auth.url,
               oauth: {
-                client_id: "fx-mcp-auth-test",
+                client_id: "ax-mcp-auth-test",
                 scopes: ["tools.read"],
               },
               startup_timeout_ms: 5_000,
@@ -1535,7 +1535,7 @@ describe("MCP remote authentication lifecycle", () => {
   );
 
   test(
-    "fx ask reports an actionable auth requirement without opening a browser",
+    "ax ask reports an actionable auth requirement without opening a browser",
     async () => {
       upstream = startModernMcpHttpFixture("json");
       auth = startAuthFixture(upstream.url);
@@ -1584,7 +1584,7 @@ describe("MCP remote authentication lifecycle", () => {
       upstream = startModernMcpHttpFixture("json");
       auth = startAuthFixture(upstream.url);
       const root = createRoot(auth);
-      const account = `fx-mcp-auth-${process.pid}-${Date.now()}`;
+      const account = `ax-mcp-auth-${process.pid}-${Date.now()}`;
       mkdirSync(join(root.home, "Library"), { recursive: true });
       symlinkSync(
         join(homedir(), "Library", "Keychains"),

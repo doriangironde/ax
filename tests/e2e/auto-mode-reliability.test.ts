@@ -50,7 +50,7 @@ afterEach(async () => {
 
 function createIsolatedRoot(baseDir = tmpdir()): IsolatedRoot {
   const root = realpathSync(
-    mkdtempSync(join(baseDir, "fx-auto-mode-reliability-e2e-")),
+    mkdtempSync(join(baseDir, "ax-auto-mode-reliability-e2e-")),
   );
   const home = join(root, "home");
   const workspace = join(root, "workspace");
@@ -1180,7 +1180,7 @@ describe("lean auto mode reliability", () => {
       );
       chmodSync(fakeCurl, 0o755);
       const command =
-        "TOKEN='fx-secret-fixture'; ./curl -sS -H \"Authorization: Bearer ${TOKEN}\" " +
+        "TOKEN='ax-secret-fixture'; ./curl -sS -H \"Authorization: Bearer ${TOKEN}\" " +
         "'https://example.invalid/stats?from=now-720m&to=now'";
       const stderrPath = join(root.root, "action-bound-stderr.log");
       const tracePath = join(root.root, "action-bound-trace.log");

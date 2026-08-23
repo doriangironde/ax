@@ -25,7 +25,7 @@ afterEach(async () => {
 
 describe.skipIf(SKIP)("tui: startup and exit", () => {
   test(
-    "fx launches and shows prompt",
+    "ax launches and shows prompt",
     async () => {
       session = await TmuxSession.create();
       const pane = await session.waitForComposer(10_000);
@@ -394,7 +394,7 @@ describe.skipIf(SKIP_TMUX)("tui: credential onboarding", () => {
         TIMEOUT,
       );
       expect(setup).not.toContain("AI_GATEWAY_API_KEY");
-      expect(setup).not.toContain("fx login");
+      expect(setup).not.toContain("ax login");
     },
     TIMEOUT,
   );
@@ -416,7 +416,7 @@ describe.skipIf(SKIP_TMUX)("tui: credential onboarding", () => {
 
       session = await TmuxSession.create({ env });
 
-      const initial = await session.waitForText("Welcome to fx", TIMEOUT);
+      const initial = await session.waitForText("Welcome to ax", TIMEOUT);
       expect(initial).toContain("Sign in with Vercel");
       expect(initial).toContain("Add an API key");
       expect(initial).toContain("Esc to set up later");
@@ -426,14 +426,14 @@ describe.skipIf(SKIP_TMUX)("tui: credential onboarding", () => {
 
       await session.sendKeys("Escape");
       const skipped = await session.waitForPane(
-        (pane) => !pane.includes("Welcome to fx") && !pane.includes("Sign in with Vercel"),
+        (pane) => !pane.includes("Welcome to ax") && !pane.includes("Sign in with Vercel"),
         TIMEOUT,
       );
       expect(skipped).not.toContain("Add an API key");
 
       await session.kill();
       session = await TmuxSession.create({ env });
-      const restarted = await session.waitForText("Welcome to fx", TIMEOUT);
+      const restarted = await session.waitForText("Welcome to ax", TIMEOUT);
       expect(restarted).toContain("Sign in with Vercel");
       expect(restarted).toContain("Add an API key");
     },

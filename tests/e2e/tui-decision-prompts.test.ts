@@ -32,12 +32,12 @@ const TIMEOUT = 30_000;
 const OUTER_MODEL = "openai/gpt-5";
 const APPROVAL_PROMPT = "Would you like to run the following command?";
 const DEFAULT_COMMAND_APPROVAL_REASON =
-  "Reason: fx needs your approval before running this shell command.";
+  "Reason: ax needs your approval before running this shell command.";
 const COMMAND_ALWAYS_CHOICE = "Yes, and don't ask again for this exact command";
 const COMMAND_YES_CHOICE = "Yes";
 const COMMAND_NO_CHOICE = "No";
-const COMMAND_YES_AMENDMENT = "Yes, and tell fx what to do next";
-const COMMAND_NO_AMENDMENT = "No, and tell fx what to do differently";
+const COMMAND_YES_AMENDMENT = "Yes, and tell ax what to do next";
+const COMMAND_NO_AMENDMENT = "No, and tell ax what to do differently";
 const QUESTION_PROMPT = "Choose next step?";
 const FORBIDDEN_TYPING = "typing a reply";
 const FORBIDDEN_TYPING_SUFFIX = "ping a reply";
@@ -377,7 +377,7 @@ function createIsolatedRoot(
   permissionMode: "ask" | "auto" = "ask",
   permission: Record<string, unknown> = {},
 ) {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-decision-e2e-")));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-decision-e2e-")));
   const home = join(root, "home");
   const workspace = join(root, "workspace");
   mkdirSync(join(home, ".fx"), { recursive: true });
@@ -1045,7 +1045,7 @@ describe.skipIf(SKIP)("tui: decision prompt input isolation", () => {
       ].join("\n");
       const tapeRoot = process.env.FX_RECORD
         ? null
-        : mkdtempSync(join(tmpdir(), "fx-question-pacer-"));
+        : mkdtempSync(join(tmpdir(), "ax-question-pacer-"));
       if (tapeRoot) roots.push(tapeRoot);
       const tapePath = process.env.FX_RECORD ?? join(tapeRoot!, "question.fxtape");
       const ctx = await launchScenario(
@@ -1162,7 +1162,7 @@ describe.skipIf(SKIP)("tui: decision prompt input isolation", () => {
     async () => {
       const tapeRoot = process.env.FX_RECORD
         ? null
-        : mkdtempSync(join(tmpdir(), "fx-inline-generic-approval-"));
+        : mkdtempSync(join(tmpdir(), "ax-inline-generic-approval-"));
       if (tapeRoot) roots.push(tapeRoot);
       const tapePath = process.env.FX_RECORD ?? join(tapeRoot!, "approval.fxtape");
       const ctx = await openApprovalPrompt("generic approval denied", {
@@ -1211,7 +1211,7 @@ describe.skipIf(SKIP)("tui: decision prompt input isolation", () => {
     async () => {
       const tapeRoot = process.env.FX_RECORD
         ? null
-        : mkdtempSync(join(tmpdir(), "fx-long-command-approval-"));
+        : mkdtempSync(join(tmpdir(), "ax-long-command-approval-"));
       if (tapeRoot) roots.push(tapeRoot);
       const tapePath = process.env.FX_RECORD ?? join(tapeRoot!, "approval.fxtape");
       const traceEnv = process.env.FX_TRACE_LOG
@@ -1252,7 +1252,7 @@ describe.skipIf(SKIP)("tui: decision prompt input isolation", () => {
     async () => {
       const tapeRoot = process.env.FX_RECORD
         ? null
-        : mkdtempSync(join(tmpdir(), "fx-fragmented-command-approval-"));
+        : mkdtempSync(join(tmpdir(), "ax-fragmented-command-approval-"));
       if (tapeRoot) roots.push(tapeRoot);
       const tapePath = process.env.FX_RECORD ?? join(tapeRoot!, "approval.fxtape");
       const ctx = await launchScenario(
@@ -1339,7 +1339,7 @@ describe.skipIf(SKIP)("tui: decision prompt input isolation", () => {
     async () => {
       const tapeRoot = process.env.FX_RECORD
         ? null
-        : mkdtempSync(join(tmpdir(), "fx-inline-command-approval-"));
+        : mkdtempSync(join(tmpdir(), "ax-inline-command-approval-"));
       if (tapeRoot) roots.push(tapeRoot);
       const tapePath = process.env.FX_RECORD ?? join(tapeRoot!, "approval.fxtape");
       const ctx = await launchScenario([
@@ -1383,7 +1383,7 @@ describe.skipIf(SKIP)("tui: decision prompt input isolation", () => {
     async () => {
       const tapeRoot = process.env.FX_RECORD
         ? null
-        : mkdtempSync(join(tmpdir(), "fx-overflow-command-approval-"));
+        : mkdtempSync(join(tmpdir(), "ax-overflow-command-approval-"));
       if (tapeRoot) roots.push(tapeRoot);
       const tapePath = process.env.FX_RECORD ?? join(tapeRoot!, "approval.fxtape");
       const ctx = await launchScenario([
@@ -1461,7 +1461,7 @@ describe.skipIf(SKIP)("tui: decision prompt input isolation", () => {
       const finalMarker = "generic approval accepted handled";
       const tapeRoot = process.env.FX_RECORD
         ? null
-        : mkdtempSync(join(tmpdir(), "fx-accepted-generic-approval-"));
+        : mkdtempSync(join(tmpdir(), "ax-accepted-generic-approval-"));
       if (tapeRoot) roots.push(tapeRoot);
       const tapePath = process.env.FX_RECORD ?? join(tapeRoot!, "approval.fxtape");
       const ctx = await launchScenario(

@@ -28,7 +28,7 @@ import {
   tmuxAvailable,
 } from "./tmux-helpers";
 
-const INTERNAL_MODE = "--fx-internal-terminal-host";
+const INTERNAL_MODE = "--ax-internal-terminal-host";
 const HEADER_BYTES = 28;
 const TERMINAL_FIXTURE_SHELL = terminalFixtureShell();
 const CLEANUP_CHILD_EXIT_TIMEOUT_MS = 5_000;
@@ -192,7 +192,7 @@ async function cleanupOwnedTestResources(
 }
 
 function makeHome(): string {
-  const home = mkdtempSync(join(tmpdir(), "fx-terminal-host-"));
+  const home = mkdtempSync(join(tmpdir(), "ax-terminal-host-"));
   chmodSync(home, 0o700);
   const owner = join(home, ".fx", "sessions", TERMINAL_OWNER_SESSION);
   mkdirSync(owner, { recursive: true, mode: 0o700 });
@@ -247,7 +247,7 @@ function rememberPrivateTmuxIdentities(resource: PrivateTmuxResource): void {
       },
     );
     for (const name of names.trim().split("\n")) {
-      if (name.startsWith("fx-") && name.length === 35) {
+      if (name.startsWith("ax-") && name.length === 35) {
         resource.identities.add(name.slice(3));
       }
     }
@@ -335,8 +335,8 @@ function privateTmuxProcessPids(
 function tmuxPeerArtifacts(): string[] {
   return readdirSync("/tmp")
     .filter((name) =>
-      name.startsWith("fx-tmux-capture-") ||
-      name.startsWith("fx-tmux-marker-")
+      name.startsWith("ax-tmux-capture-") ||
+      name.startsWith("ax-tmux-marker-")
     )
     .sort();
 }
@@ -355,7 +355,7 @@ function tmuxCaptureHelperPids(): number[] {
     .filter((entry): entry is { pid: number; command: string } => entry !== null)
     .filter((entry) =>
       entry.command.includes(FX_BIN) &&
-      entry.command.includes("--fx-internal-terminal-tmux-capture")
+      entry.command.includes("--ax-internal-terminal-tmux-capture")
     )
     .map((entry) => entry.pid)
     .sort((left, right) => left - right);
@@ -441,7 +441,7 @@ async function runClientFixture(
 ) {
   const current = binary === FX_BIN;
   const executable = current ? buildCurrentClientFixture() : binary;
-  const args = current ? [] : ["--fx-internal-terminal-client-fixture"];
+  const args = current ? [] : ["--ax-internal-terminal-client-fixture"];
   const child = spawn(executable, args, {
     env: {
       ...process.env,
@@ -462,7 +462,7 @@ async function runClientFixture(
 function buildCurrentClientFixture(): string {
   if (currentClientFixtureBinary !== null) return currentClientFixtureBinary;
   const repoRoot = join(import.meta.dir, "../..");
-  const fixtureRoot = mkdtempSync(join(tmpdir(), "fx-terminal-client-fixture-"));
+  const fixtureRoot = mkdtempSync(join(tmpdir(), "ax-terminal-client-fixture-"));
   const binary = join(fixtureRoot, "terminal-client-fixture");
   fixtureArtifacts.push(fixtureRoot);
   execFileSync(
@@ -485,7 +485,7 @@ function buildThreadForkFixture(): string {
     return currentThreadForkFixtureBinary;
   }
   const repoRoot = join(import.meta.dir, "../..");
-  const fixtureRoot = mkdtempSync(join(tmpdir(), "fx-terminal-thread-fork-"));
+  const fixtureRoot = mkdtempSync(join(tmpdir(), "ax-terminal-thread-fork-"));
   const source = join(fixtureRoot, "thread-fork.c");
   const binary = join(fixtureRoot, "thread-fork");
   fixtureArtifacts.push(fixtureRoot);
@@ -596,14 +596,14 @@ function terminalTransportPaths(home: string) {
     };
   }
   const digest = createHash("sha256")
-    .update("fx.terminal.transport.v1\0")
+    .update("ax.terminal.transport.v1\0")
     .update(home)
     .digest("hex")
     .slice(0, 32);
   const uid = process.getuid?.();
   if (uid === undefined) throw new Error("missing Unix uid");
   const base = process.platform === "darwin" ? "/private/tmp" : "/tmp";
-  const dir = join(base, `fx-terminal-${uid}-${digest}`);
+  const dir = join(base, `ax-terminal-${uid}-${digest}`);
   return {
     dir,
     socket: join(dir, "host.sock"),
@@ -612,7 +612,7 @@ function terminalTransportPaths(home: string) {
 }
 
 function makeLongHome(endpointBytes = 141): string {
-  const root = mkdtempSync(join(tmpdir(), "fx-terminal-long-home-"));
+  const root = mkdtempSync(join(tmpdir(), "ax-terminal-long-home-"));
   const endpointSuffix = join(".fx", "terminal-host", "host.sock");
   const componentBytes = endpointBytes -
     Buffer.byteLength(root) -
@@ -1118,12 +1118,12 @@ function ownerCatalogAuthorityForSession(
   const proof = { bytes: Array(32).fill(11) };
   const claim = { principal: ownerPrincipal, actor, proof };
   const key = ownerCatalogDigest(
-    "fx.terminal.owner-catalog-key.v2\0",
+    "ax.terminal.owner-catalog-key.v2\0",
     ownerPrincipal,
     actor,
   ).toString("hex");
   const verifier = ownerCatalogDigest(
-    "fx.terminal.owner-catalog-proof.v2\0",
+    "ax.terminal.owner-catalog-proof.v2\0",
     ownerPrincipal,
     actor,
     Buffer.from(proof.bytes),
@@ -2423,7 +2423,7 @@ static int launcher_process(void) {
   if (fd < 0) return 0;
   ssize_t count = read(fd, bytes, sizeof(bytes));
   close(fd);
-  const char needle[] = "--fx-internal-terminal-tmux-launcher";
+  const char needle[] = "--ax-internal-terminal-tmux-launcher";
   if (count < (ssize_t)(sizeof(needle) - 1)) return 0;
   for (ssize_t i = 0; i <= count - (ssize_t)(sizeof(needle) - 1); i++) {
     if (memcmp(bytes + i, needle, sizeof(needle) - 1) == 0) return 1;
@@ -2579,7 +2579,7 @@ exec /bin/bash "$@"
       "do_signal_stop",
     ]);
     expect(processLines.some((line) =>
-      line.includes("--fx-internal-terminal-control")
+      line.includes("--ax-internal-terminal-control")
     )).toBe(false);
     expect(existsSync(resumedProof)).toBe(false);
     const record = durableTerminalRecord(home).value as unknown as {
@@ -3072,7 +3072,7 @@ test.skipIf(!tmuxAvailable())(
         backend_identity: string;
       };
       const tmuxSocket = terminalTransportPaths(home).tmuxSocket;
-      const sessionName = `fx-${record.backend_identity}`;
+      const sessionName = `ax-${record.backend_identity}`;
       const panePid = Number(execFileSync(
         "tmux",
         ["-S", tmuxSocket, "display-message", "-p", "-t", sessionName, "#{pane_pid}"],
@@ -3177,8 +3177,8 @@ test.skipIf(!tmuxAvailable())("transient tmux recovery failures preserve the pan
     const siblingIdentity = (durableTerminalRecordFor(home, siblingId) as {
       backend_identity: string;
     }).backend_identity;
-    const sessionName = `fx-${backendIdentity}`;
-    const siblingName = `fx-${siblingIdentity}`;
+    const sessionName = `ax-${backendIdentity}`;
+    const siblingName = `ax-${siblingIdentity}`;
     const panePid = Number(execFileSync(
       "tmux",
       ["-S", tmuxSocket, "display-message", "-p", "-t", sessionName, "#{pane_pid}"],
@@ -3447,8 +3447,8 @@ test.skipIf(!tmuxAvailable())("tmux recovery restores the saved workspace scope"
   };
   const backendIdentity = durableIdentity(sessionId);
   const invalidBackendIdentity = durableIdentity(invalidSessionId);
-  const sessionName = `fx-${backendIdentity}`;
-  const invalidSessionName = `fx-${invalidBackendIdentity}`;
+  const sessionName = `ax-${backendIdentity}`;
+  const invalidSessionName = `ax-${invalidBackendIdentity}`;
   const panePid = Number(execFileSync(
     "tmux",
     ["-S", tmuxSocket, "display-message", "-p", "-t", sessionName, "#{pane_pid}"],
@@ -3690,7 +3690,7 @@ test.skipIf(!tmuxAvailable())("private tmux teardown owns partial recovery resou
     identities: new Set(),
   };
   privateTmuxServers.set(retryProbe.socket, retryProbe);
-  const transportRoot = mkdtempSync(join(tmpdir(), "fx-terminal-cleanup-root-"));
+  const transportRoot = mkdtempSync(join(tmpdir(), "ax-terminal-cleanup-root-"));
   transportRoots.add(transportRoot);
   const attempts: string[] = [];
   const cleanupFailure = new Error("cleanup failure");
@@ -4614,7 +4614,7 @@ test("poll path escapes preserve exact failures only for capable peers", async (
     { capabilities: 7, expectedCode: "invalid_request" },
   ]) {
     const home = makeHome();
-    const outside = mkdtempSync(join(tmpdir(), "fx-terminal-monitor-outside-"));
+    const outside = mkdtempSync(join(tmpdir(), "ax-terminal-monitor-outside-"));
     homes.push(outside);
     writeFileSync(join(outside, "ready"), "ready");
     symlinkSync(outside, join(home, "escape"));
@@ -4657,7 +4657,7 @@ test("custom probe re-canonicalization rejects a post-install symlink swap", asy
   const home = makeHome();
   const inside = join(home, "inside");
   mkdirSync(inside);
-  const outside = mkdtempSync(join(tmpdir(), "fx-terminal-monitor-swap-"));
+  const outside = mkdtempSync(join(tmpdir(), "ax-terminal-monitor-swap-"));
   homes.push(outside);
   const alias = join(home, "probe-cwd");
   const executed = join(outside, "executed");
@@ -8028,7 +8028,7 @@ test.skipIf(!tmuxAvailable())(
         "display-message",
         "-p",
         "-t",
-        `fx-${identity}`,
+        `ax-${identity}`,
         "#{pane_pid}",
       ],
       { encoding: "utf8" },
@@ -8065,7 +8065,7 @@ test.skipIf(!tmuxAvailable())(
       ["-S", tmuxSocket, "list-sessions", "-F", "#{session_name}"],
       { encoding: "utf8" },
     ).trim().split("\n");
-    expect(sessionNames).toEqual([`fx-${validIdentity}`]);
+    expect(sessionNames).toEqual([`ax-${validIdentity}`]);
     expect(existsSync(`/tmp/fx-tmux-capture-${invalidIdentity}.sock`)).toBe(
       false,
     );
@@ -8226,7 +8226,7 @@ test.skipIf(!tmuxAvailable())(
         "display-message",
         "-p",
         "-t",
-        `fx-${closingIdentity}`,
+        `ax-${closingIdentity}`,
         "#{pane_id}|#{pane_dead}",
       ],
       { encoding: "utf8" },
@@ -8234,7 +8234,7 @@ test.skipIf(!tmuxAvailable())(
     expect(retainedPane).toMatch(/^%\d+\|[01]$/);
     execFileSync(
       "tmux",
-      ["-S", tmuxSocket, "has-session", "-t", `fx-${siblingIdentity}`],
+      ["-S", tmuxSocket, "has-session", "-t", `ax-${siblingIdentity}`],
     );
     success(await requestAction(
       first.client,
@@ -8278,7 +8278,7 @@ test.skipIf(!tmuxAvailable())(
       ["-S", tmuxSocket, "list-sessions", "-F", "#{session_name}"],
       { encoding: "utf8" },
     ).trim().split("\n");
-    expect(names).toEqual([`fx-${siblingIdentity}`]);
+    expect(names).toEqual([`ax-${siblingIdentity}`]);
     success(await requestAction(
       recovered.client,
       recovered.revision!,
@@ -8369,7 +8369,7 @@ test.skipIf(!tmuxAvailable())(
         "display-message",
         "-p",
         "-t",
-        `fx-${identity}`,
+        `ax-${identity}`,
         "#{pane_pid}",
       ],
       { encoding: "utf8" },
@@ -8414,11 +8414,11 @@ test.skipIf(!tmuxAvailable())(
     expect(processExists(siblingPanePid)).toBe(true);
     execFileSync(
       "tmux",
-      ["-S", tmuxSocket, "has-session", "-t", `fx-${closingIdentity}`],
+      ["-S", tmuxSocket, "has-session", "-t", `ax-${closingIdentity}`],
     );
     execFileSync(
       "tmux",
-      ["-S", tmuxSocket, "has-session", "-t", `fx-${siblingIdentity}`],
+      ["-S", tmuxSocket, "has-session", "-t", `ax-${siblingIdentity}`],
     );
 
     const replacement = startHost(home, undefined, 500);
@@ -8431,14 +8431,14 @@ test.skipIf(!tmuxAvailable())(
     expect(readdirSync(stateDir)).not.toContain(transactionName);
     execFileSync(
       "tmux",
-      ["-S", tmuxSocket, "has-session", "-t", `fx-${siblingIdentity}`],
+      ["-S", tmuxSocket, "has-session", "-t", `ax-${siblingIdentity}`],
     );
     const names = execFileSync(
       "tmux",
       ["-S", tmuxSocket, "list-sessions", "-F", "#{session_name}"],
       { encoding: "utf8" },
     ).trim().split("\n");
-    expect(names).toEqual([`fx-${siblingIdentity}`]);
+    expect(names).toEqual([`ax-${siblingIdentity}`]);
 
     success(await requestAction(
       recovered.client,
@@ -9619,7 +9619,7 @@ test("long profile homes use distinct private transport roots and retain durable
 test("long-home transport roots reject symlink and non-private components without mutation", async () => {
   const symlinkHome = makeLongHome(141);
   const symlinkTransport = terminalTransportPaths(symlinkHome);
-  const outside = mkdtempSync(join(tmpdir(), "fx-terminal-foreign-runtime-"));
+  const outside = mkdtempSync(join(tmpdir(), "ax-terminal-foreign-runtime-"));
   homes.push(outside);
   writeFileSync(join(outside, "host.sock"), "foreign");
   symlinkSync(outside, symlinkTransport.dir);

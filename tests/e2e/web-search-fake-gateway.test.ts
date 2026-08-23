@@ -283,7 +283,7 @@ function createIsolatedRoot(
   webSearchPermission: PermissionAction = "allow",
   settings: Record<string, unknown> = {},
 ) {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-web-search-e2e-")));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-web-search-e2e-")));
   const home = join(root, "home");
   const workspace = join(root, "workspace");
   mkdirSync(join(home, ".fx"), { recursive: true });
@@ -492,7 +492,7 @@ describe("web_search Gateway fixture", () => {
   );
 
   test(
-    "default fx ask unadvertised native web_search cannot start a worker",
+    "default ax ask unadvertised native web_search cannot start a worker",
     async () => {
       const root = createIsolatedRoot();
       const gateway = startFakeGateway([
@@ -776,7 +776,7 @@ describe("web_search Gateway fixture", () => {
   );
 
   test(
-    "fx ask preserves the exact GLM model while sending declared Fast",
+    "ax ask preserves the exact GLM model while sending declared Fast",
     async () => {
       const root = createIsolatedRoot("allow", {
         model: "zai/glm-5.2",
@@ -970,7 +970,7 @@ describe("web_search Gateway fixture", () => {
   );
 
   test(
-    "default fx ask applies environment model, permission, and step-limit overrides",
+    "default ax ask applies environment model, permission, and step-limit overrides",
     async () => {
       const root = createIsolatedRoot(null, {
         model: OUTER_MODEL,
