@@ -134,11 +134,9 @@ Run the test suite with `zig build test`. See [CONTRIBUTING.md](CONTRIBUTING.md)
 
 - Product identity, welcome header, help text, and terminal title say `ax`; the binary is `ax`.
 - `~/.fx` config dir, `FX_*` environment variables, session format, WASM exports, and ACP `_meta` keys keep the upstream fx names for compatibility. A future deep rename can move them.
-- Upstream release machinery (`release.yml`, `pgso-macos-arm64.yml`) is
-  rebrand-consistent: the release tarball ships the `ax` binary, and the PGSO
-  pipeline tolerates the renamed product executable (control stage adopts the
-  installed binary). `fx-pgso-*` runner-temp names remain as pipeline
-  self-naming.
+- MCP/context wire identity stays `fx` by design: the `io.modelcontextprotocol/clientInfo` name, the `_meta.fx.continueRecovery` marker, and the `<fx-turn-context>` prompt section are asserted by the conformance fixtures, which reject any other value. Do not sweep them (see FORK_GAPS.md G9).
+- Upstream release machinery (`release.yml`, `dev-release.yml`, `pgso-macos-arm64.yml`) is rebrand-consistent: the release tarballs ship the `ax` binary, and the PGSO pipeline tolerates the renamed product executable (control stage adopts the installed binary). `fx-pgso-*` runner-temp names remain as pipeline self-naming.
+- CI status: the push `CI` and `Benchmarks` workflows are green on `main`, and the four-runner `Full CI` (native checks + 16 E2E shards) passes on the `ci-verify` branch. The `Release` lane runs the full PGSO qualification on every push until the fork gets its first release tag; `Dev Release` and `Publish libfx` no-op until a tag exists.
 
 ## License
 

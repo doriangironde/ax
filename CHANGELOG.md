@@ -1,5 +1,19 @@
 # fx
 
+## ax fork (unreleased)
+
+### New Features
+
+- **ax identity:** The binary, welcome header, help text, error prefixes, resume commands, and upgrade traces say `ax`; config, session format, WASM exports, and wire protocol keys keep the upstream fx names for compatibility.
+
+### Improvements
+
+- **Fully green CI:** Material, `Benchmarks`, and the four-runner `Full CI` matrix pass; the release tarballs and the PGSO qualification pipeline tolerate the renamed product binary.
+
+### Bug Fixes
+
+- **MCP wire identity:** The binary's `clientInfo` name reverted to `fx` at all emission sites so the conformance fixture oracle, ACP sessions, and the modern MCP subscription flow agree; recovery continuation and prompt context markers keep their `fx` keys.
+
 ## 0.0.5
 
 <!-- release:start -->

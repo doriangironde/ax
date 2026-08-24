@@ -127,10 +127,15 @@ four-runner `full-ci.yml` matrix was verified on a `ci-verify` test branch
   (G9) — this was the bulk of the E2E failures.
 - SDK tests (`𝒇x` glyph, `Signed out of fx.`) and `ci.yml`
   `--test-name-pattern "fx ask …"` filter.
-- `release.yml` packaged the `ax` binary under the `fx` tar member, failing
-  the Package step on every push; PGSO control stage now adopts the
-  product-named executable (`scripts/pgso/pipeline.py` `build_control`).
+- `release.yml`/`dev-release.yml` packaged the `ax` binary under the `fx`
+  tar member, failing the Package step on every push; PGSO control stage
+  now adopts the product-named executable (`scripts/pgso/pipeline.py`
+  `build_control`).
 - `ci-shards`/tmux harness window/pane index resolution (G3).
+- Terminal/upgrade sweep tail: `ax-trace-*.md` report filters, process
+  discovery basename, `ax-terminal-` transport root, internal control-mode
+  flag, upgrade tarball member (`ax`), graceful-exit resume symlink, and
+  the render-replay fixture name.
 
 Remaining known items:
 1. PGSO self-named runner-temp paths (`fx-pgso-*`, `control/bin/fx` upload
