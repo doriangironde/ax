@@ -13,7 +13,8 @@ import {
   writeFileSync,
 } from "node:fs";
 import { platform, tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
+
 import { FX_BIN } from "../evals/eval-helpers";
 import {
   composerContains,
@@ -541,7 +542,11 @@ function findFxProcessId(rows: readonly string[]): number | undefined {
     const match = row.trim().match(/^(\d+)\s+(.+)$/);
     if (!match) continue;
     const command = match[2]!;
-    if (command === "fx" || command === FX_BIN || command.endsWith("/fx")) {
+    if (
+      command === basename(FX_BIN) ||
+      command === FX_BIN ||
+      command.endsWith(`/${basename(FX_BIN)}`)
+    ) {
       return Number(match[1]);
     }
   }

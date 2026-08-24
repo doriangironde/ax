@@ -215,7 +215,7 @@ function sessionIdFromHome(root: IsolatedRoot): string {
 
 function latestTraceReportPath(root: IsolatedRoot): string {
   const reports = readdirSync(root.root)
-    .filter((entry) => entry.startsWith("fx-trace-") && entry.endsWith(".md"))
+    .filter((entry) => entry.startsWith("ax-trace-") && entry.endsWith(".md"))
     .map((entry) => {
       const path = join(root.root, entry);
       return { path, mtimeMs: statSync(path).mtimeMs };
@@ -2079,7 +2079,7 @@ describe("effect-aware command permissions", () => {
       expect(readFileSync(openerPath, "utf8")).toBe("https://fx.sh/feedback");
       expect(existsSync(clipboardMarker)).toBe(false);
       expect(
-        readdirSync(root.root).filter((entry) => entry.startsWith("fx-trace-")),
+        readdirSync(root.root).filter((entry) => entry.startsWith("ax-trace-")),
       ).toHaveLength(0);
       const escapes = await activeSession.capturePaneEscapes();
       expect(escapes).not.toContain("Feedback:");

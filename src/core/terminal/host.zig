@@ -134,7 +134,7 @@ fn resolveEndpointSelection(
     );
     const runtime_name = try std.fmt.allocPrint(
         alloc,
-        "fx-terminal-{d}-{s}",
+        "ax-terminal-{d}-{s}",
         .{ uid, digest_hex },
     );
     defer alloc.free(runtime_name);

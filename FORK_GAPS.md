@@ -118,22 +118,35 @@ harness fix landed; several `:0`-targeted failures may have been the
 **Why:** GitHub repo exists but no Actions runs have been green; the shared
 workflows were renamed in files but some paths still say `fx`.
 
-**Fixes:**
-1. Repo settings → Actions → enable (if not already).
-2. `grep -rn "zig-out/bin/fx" .github/ scripts/ benchmarks/` — known
-   leftovers, all mechanical:
-   - `pgso-macos-arm64.yml` — `fx-pgso-*` temp dirs + `control/bin/fx`
-     artifact paths are self-contained in runner temp; the PGSO runner also
-     installs its candidate at `zig-out/bin/fx` (see `scripts/pgso/README.md`)
-     — update to `ax` when you next touch PGSO.
-   - `scripts/pgso/README.md` — prose references.
-3. Push a commit to a test branch, run `full-ci.yml`, and iterate until all
-   four native runners pass.
+**Status (2026-08-23): largely done.** The push matrix on `main`
+(`ci.yml` + `Benchmarks` + `Release`) is green on the current commit; the
+four-runner `full-ci.yml` matrix was verified on a `ci-verify` test branch
+(see below) and passes. What was fixed along the way:
+
+- `mcp_runtime`/`tool_subscription` wire identity + test/fixture alignment
+  (G9) — this was the bulk of the E2E failures.
+- SDK tests (`𝒇x` glyph, `Signed out of fx.`) and `ci.yml`
+  `--test-name-pattern "fx ask …"` filter.
+- `release.yml` packaged the `ax` binary under the `fx` tar member, failing
+  the Package step on every push; PGSO control stage now adopts the
+  product-named executable (`scripts/pgso/pipeline.py` `build_control`).
+- `ci-shards`/tmux harness window/pane index resolution (G3).
+
+Remaining known items:
+1. Repo settings → Actions enabled already (runs execute).
+2. PGSO self-named runner-temp paths (`fx-pgso-*`, `control/bin/fx` upload
+   paths in `pgso-macos-arm64.yml`, `scripts/pgso/README.md` prose) are
+   deliberate pipeline self-naming — the control path now exists thanks to
+   the `build_control` shim; leave the names.
+3. The `Release` workflow runs the full PGSO qualification on every push
+   because the fork has no release tags (`check-version` reports needed).
+   That is heavy; either accept it or tag 0.0.5 once a release is wanted.
 4. Decide later whether the fork keeps the PGSO/binary-size/bench gates
    (they enforce upstream's 7.8 MiB ceiling and 2 ms startup budget; both
    still apply to ax and should be kept).
 
-**Verify:** full-ci green on all runners for the exact commit.
+**Verify:** full-ci green on all runners for the exact commit (see the
+branch-run record below).
 
 ### G2 — Local TUI flakiness (mostly resolved; CI is the real gate)
 

@@ -134,7 +134,11 @@ Run the test suite with `zig build test`. See [CONTRIBUTING.md](CONTRIBUTING.md)
 
 - Product identity, welcome header, help text, and terminal title say `ax`; the binary is `ax`.
 - `~/.fx` config dir, `FX_*` environment variables, session format, WASM exports, and ACP `_meta` keys keep the upstream fx names for compatibility. A future deep rename can move them.
-- Upstream release machinery (`release.yml`, `dev-release.yml`, `pgso-macos-arm64.yml`) still references `zig-out/bin/fx` paths in places; update them when publishing this fork.
+- Upstream release machinery (`release.yml`, `pgso-macos-arm64.yml`) is
+  rebrand-consistent: the release tarball ships the `ax` binary, and the PGSO
+  pipeline tolerates the renamed product executable (control stage adopts the
+  installed binary). `fx-pgso-*` runner-temp names remain as pipeline
+  self-naming.
 
 ## License
 
