@@ -118,7 +118,7 @@ harness fix landed; several `:0`-targeted failures may have been the
 **Why:** GitHub repo exists but no Actions runs have been green; the shared
 workflows were renamed in files but some paths still say `fx`.
 
-**Status (2026-08-23): largely done.** The push matrix on `main`
+**Status (2026-08-24): DONE — verified green.** The push matrix on `main`
 (`ci.yml` + `Benchmarks` + `Release`) is green on the current commit; the
 four-runner `full-ci.yml` matrix was verified on a `ci-verify` test branch
 (see below) and passes. What was fixed along the way:
@@ -133,20 +133,21 @@ four-runner `full-ci.yml` matrix was verified on a `ci-verify` test branch
 - `ci-shards`/tmux harness window/pane index resolution (G3).
 
 Remaining known items:
-1. Repo settings → Actions enabled already (runs execute).
-2. PGSO self-named runner-temp paths (`fx-pgso-*`, `control/bin/fx` upload
+1. PGSO self-named runner-temp paths (`fx-pgso-*`, `control/bin/fx` upload
    paths in `pgso-macos-arm64.yml`, `scripts/pgso/README.md` prose) are
    deliberate pipeline self-naming — the control path now exists thanks to
    the `build_control` shim; leave the names.
-3. The `Release` workflow runs the full PGSO qualification on every push
+2. The `Release` workflow runs the full PGSO qualification on every push
    because the fork has no release tags (`check-version` reports needed).
-   That is heavy; either accept it or tag 0.0.5 once a release is wanted.
-4. Decide later whether the fork keeps the PGSO/binary-size/bench gates
-   (they enforce upstream's 7.8 MiB ceiling and 2 ms startup budget; both
-   still apply to ax and should be kept).
+   That is heavy and slow; either accept it or tag 0.0.5 once a release is
+   wanted. `Dev Release` and `Publish libfx` lanes legitimately no-op/exit
+   nonzero until a release tag exists.
+3. Keep the PGSO/binary-size/bench gates: they enforce upstream's 7.8 MiB
+   ceiling and 2 ms startup budget; both apply to ax.
 
-**Verify:** full-ci green on all runners for the exact commit (see the
-branch-run record below).
+**Verify:** full-ci green on all runners for the exact commit — recorded
+green at commit `79f5cef` on branch `ci-verify` (24/24 jobs: 4 native
+checks + 16 E2E shards), and the push `CI` + `Benchmarks` green on `main`. 
 
 ### G2 — Local TUI flakiness (mostly resolved; CI is the real gate)
 
