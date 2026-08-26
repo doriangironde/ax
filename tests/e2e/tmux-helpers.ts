@@ -107,6 +107,31 @@ function resolvePaneId(tmuxPrefix: string[], name: string): string {
 }
 
 /**
+ * Removes tmux socket directories whose server process is no longer alive.
+ * A dead server's `$TMUX_TMPDIR/tmux-<pid>` directory makes every later
+ * tmux client with the default socket fail with "no server running" instead
+ * of starting a fresh server, and tmux does not clean the stale dir itself
+ * when a newer server's dir exists. Only default-socket servers are affected;
+ * isolated sessions use uniquely named `-L` sockets.
+ */
+function sweepStaleSocketDirs(tmuxPrefix: string[]): void {
+  if (tmuxPrefix.length > 0) return;
+  const tmpDir = process.env.TMUX_TMPDIR ?? tmpdir();
+  try {
+    for (const entry of readdirSync(tmpDir)) {
+      if (!entry.startsWith("tmux-")) continue;
+      const pid = Number.parseInt(entry.slice("tmux-".length), 10);
+      if (!Number.isInteger(pid) || pid <= 0) continue;
+      try {
+        process.kill(pid, 0);
+      } catch {
+        rmSync(join(tmpDir, entry), { recursive: true, force: true });
+      }
+    }
+  } catch {}
+}
+
+/**
  * Whether the tmux server uses the default window and pane indexing. Servers
  * with the defaults answer `name:0.0` targets without any query (upstream
  * harness behavior); only non-default `base-index`/`pane-base-index`
@@ -610,6 +635,7 @@ export class TmuxSession {
       ? `tmux wait-for ${shellQuote(startGate)} && exec ${observedCmd}`
       : observedCmd;
     const tmuxPrefix = resolvedSocketName ? ["-L", resolvedSocketName] : [];
+    sweepStaleSocketDirs(tmuxPrefix);
     const setupSessionName = `${name}-setup`;
     const killSetupSession = () => {
       try {

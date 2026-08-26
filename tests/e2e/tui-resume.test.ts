@@ -56,7 +56,7 @@ function startUpgradeServer(
   argvLogPath: string,
 ): { baseUrl: string; stop: () => void } {
   const artifactDir = join(root, "release-artifact");
-  const wrapperPath = join(artifactDir, "fx");
+  const wrapperPath = join(artifactDir, "ax");
   const archivePath = join(root, "ax.tar.gz");
   mkdirSync(artifactDir);
   const script = `#!/bin/sh
@@ -71,7 +71,7 @@ exec ${shellQuote(FX_BIN)} "$@"
 `;
   writeFileSync(wrapperPath, script);
   chmodSync(wrapperPath, 0o755);
-  const tar = Bun.spawnSync(["tar", "-czf", archivePath, "-C", artifactDir, "fx"]);
+  const tar = Bun.spawnSync(["tar", "-czf", archivePath, "-C", artifactDir, "ax"]);
   if (tar.exitCode !== 0) throw new Error(tar.stderr.toString());
 
   const archive = readFileSync(archivePath);
