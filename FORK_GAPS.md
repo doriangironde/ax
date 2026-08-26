@@ -631,6 +631,23 @@ streamlined sign-in UI, prompt-submit latency, e2e hardening). What it took:
   was created from pre-sync `main` and is independent of this merge. When
   both are on `main`, the CHANGELOG fork section merges trivially; the sync
   bullet and the release markers live in different sections.
+- **Sweep trap found by CI (2026-08-26, commit `27bc8bb`):** the `"fx"`
+  protect rule shields every quoted `"fx"` token, including `join(REPO_ROOT,
+  "zig-out", "bin", "fx")` binary paths in `mcp-stdio.test.ts` (13 sites the
+  v0.0.6 sync had already fixed). After any merge, grep tests for
+  `zig-out/bin/fx` and `bin", "fx"` — the TUI mcp tests fail with 21 s pane
+  timeouts when they launch a nonexistent `fx` binary. Also re-check the MCP
+  `clientInfo` sites with the ESCAPED pattern
+  (`grep -n 'clientInfo' src/core/mcp/*.zig | grep 'ax'`) — a plain
+  `grep '"name":"ax"'` misses `\"name\":\"ax\"`.
+- **Upstream signing machinery is fork-removed (2026-08-26):** upstream's
+  sign-and-notarize steps hardcode Vercel's Apple identity and need secrets
+  the fork does not have; they were removed from `release.yml` (see the
+  round-2 notes) and from `pgso-macos-arm64.yml` (`sign-stable-release` now
+  only packages, and packages the candidate under the `ax` tarball member).
+  `scripts/sign-and-notarize-macos.sh` and `scripts/tests/test_macos_signing.py`
+  stay on disk, unused by any fork workflow (the python test asserts the
+  upstream pipeline shape and is not wired into CI).
 - **Next planned feature:** G10 v2 item 3 — live `/v1/models` catalog refresh
   for custom providers (`ax provider refresh <name>`); the local mock server
   will need a `/v1/models` endpoint for the e2e.
