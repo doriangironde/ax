@@ -537,7 +537,7 @@ function startFakeGrokOAuth(options: {
           return new Response("invalid authorize request", { status: 400 });
         }
         if (url.searchParams.get("referrer") !== "fx") {
-          return new Response("missing ax referrer", { status: 400 });
+          return new Response("missing fx referrer", { status: 400 });
         }
         const callback = new URL(redirectUri);
         callback.searchParams.set("code", "grok-code");
@@ -616,7 +616,10 @@ function startFakeGrokOAuth(options: {
   };
 }
 
-async function runGrokLoginWithBrowser(env: Record<string, string | undefined>) {
+async function runGrokLoginWithBrowser(
+  env: Record<string, string | undefined>,
+  authorizationCode?: string,
+) {
   const childEnv: NodeJS.ProcessEnv = { ...process.env };
   for (const [key, value] of Object.entries(env)) {
     if (value === undefined) delete childEnv[key];
@@ -625,7 +628,7 @@ async function runGrokLoginWithBrowser(env: Record<string, string | undefined>) 
   const proc = nodeSpawn(FX_BIN, ["login", "grok"], {
     cwd: REPO_ROOT,
     env: childEnv,
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: [authorizationCode ? "pipe" : "ignore", "pipe", "pipe"],
   });
   let stdout = "";
   let stderr = "";
@@ -642,8 +645,12 @@ async function runGrokLoginWithBrowser(env: Record<string, string | undefined>) 
     proc.kill("SIGTERM");
     throw new Error(`Grok login did not print an authorization URL: ${stdout}\n${stderr}`);
   }
-  const response = await fetch(authorizationUrl, { redirect: "follow" });
-  expect(response.status).toBe(200);
+  if (authorizationCode) {
+    proc.stdin!.end(`${authorizationCode}\n`);
+  } else {
+    const response = await fetch(authorizationUrl, { redirect: "follow" });
+    expect(response.status).toBe(200);
+  }
   const code = await new Promise<number>((resolve, reject) => {
     proc.once("error", reject);
     proc.once("close", (value) => resolve(value ?? 1));
@@ -879,7 +886,7 @@ function startFakeCodexAutoReview() {
       if (model === "gpt-5.4-mini") {
         return new Response(
           'data: {"type":"response.output_item.added","output_index":0,"item":{"type":"function_call","call_id":"call_permission","name":"permission_decision"}}\n\n' +
-            'data: {"type":"response.function_call_arguments.done","output_index":0,"arguments":"{\\"risk\\":\\"low\\",\\"authorization\\":\\"high\\",\\"decision\\":\\"allow\\",\\"rationale\\":\\"The user requested this harmless command.\\"}"}\n\n' +
+            'data: {"type":"response.function_call_arguments.done","output_index":0,"arguments":"{\\"risk\\":\\"low\\",\\"decision\\":\\"clear\\",\\"rationale\\":\\"The user requested this harmless command.\\"}"}\n\n' +
             'data: {"type":"response.completed","response":{"id":"gen_review","status":"completed","usage":{"input_tokens":8,"output_tokens":3}}}\n\n',
           { headers: { "content-type": "text/event-stream" } },
         );
@@ -888,7 +895,7 @@ function startFakeCodexAutoReview() {
       if (mainRequests === 1) {
         return new Response(
           'data: {"type":"response.output_item.added","output_index":0,"item":{"type":"function_call","call_id":"call_terminal","name":"terminal"}}\n\n' +
-            'data: {"type":"response.function_call_arguments.done","output_index":0,"arguments":"{\\"action\\":\\"exec\\",\\"command\\":\\"pwd\\"}"}\n\n' +
+            'data: {"type":"response.function_call_arguments.done","output_index":0,"arguments":"{\\"action\\":\\"exec\\",\\"command\\":\\"pwd\\",\\"timeout_ms\\":600000}"}\n\n' +
             'data: {"type":"response.completed","response":{"id":"gen_main_1","status":"completed","usage":{"input_tokens":5,"output_tokens":2}}}\n\n',
           { headers: { "content-type": "text/event-stream" } },
         );
@@ -945,7 +952,7 @@ function startFakeGrokAutoReview() {
       if (body.includes('"name":"permission_decision"')) {
         return new Response(
           'data: {"type":"response.output_item.added","output_index":0,"item":{"type":"function_call","call_id":"call_permission","name":"permission_decision"}}\n\n' +
-            'data: {"type":"response.function_call_arguments.done","output_index":0,"arguments":"{\\"risk\\":\\"low\\",\\"authorization\\":\\"high\\",\\"decision\\":\\"allow\\",\\"rationale\\":\\"The user requested this harmless command.\\"}"}\n\n' +
+            'data: {"type":"response.function_call_arguments.done","output_index":0,"arguments":"{\\"risk\\":\\"low\\",\\"decision\\":\\"clear\\",\\"rationale\\":\\"The user requested this harmless command.\\"}"}\n\n' +
             'data: {"type":"response.completed","response":{"id":"gen_review","status":"completed","usage":{"input_tokens":8,"output_tokens":3}}}\n\n',
           { headers: { "content-type": "text/event-stream" } },
         );
@@ -954,7 +961,7 @@ function startFakeGrokAutoReview() {
       if (mainRequests === 1) {
         return new Response(
           'data: {"type":"response.output_item.added","output_index":0,"item":{"type":"function_call","call_id":"call_terminal","name":"terminal"}}\n\n' +
-            'data: {"type":"response.function_call_arguments.done","output_index":0,"arguments":"{\\"action\\":\\"exec\\",\\"command\\":\\"pwd\\"}"}\n\n' +
+            'data: {"type":"response.function_call_arguments.done","output_index":0,"arguments":"{\\"action\\":\\"exec\\",\\"command\\":\\"pwd\\",\\"timeout_ms\\":600000}"}\n\n' +
             'data: {"type":"response.completed","response":{"id":"gen_main_1","status":"completed","usage":{"input_tokens":5,"output_tokens":2}}}\n\n',
           { headers: { "content-type": "text/event-stream" } },
         );
@@ -1034,7 +1041,9 @@ tmuxTest(
     session = await startFx(home, stderrPath, gateway, oauth.issuerUrl);
     await session.waitForComposer(TIMEOUT);
     await session.sendText("/login");
-    await session.waitForText("Sign in with Codex", TIMEOUT);
+    await session.waitForText("Connections", TIMEOUT);
+    await session.sendKeys("Enter");
+    await session.waitForText("Vercel account", TIMEOUT);
     await session.sendKeys("Enter");
     const signInScreen = await session.waitForPane(
       (pane) =>
@@ -1077,7 +1086,9 @@ tmuxTest(
     );
     await session.waitForComposer(TIMEOUT);
     await session.sendText("/login");
-    await session.waitForText("Sign in with Codex", TIMEOUT);
+    await session.waitForText("Connections", TIMEOUT);
+    await session.sendKeys("Enter");
+    await session.waitForText("Codex subscription", TIMEOUT);
     await session.sendKeys("Down");
     await session.sendKeys("Enter");
     const signInScreen = await session.waitForPane(
@@ -1099,76 +1110,6 @@ tmuxTest(
     expect(session.isAlive()).toBe(true);
     expect(existsSync(join(home, ".fx", "chatgpt-auth.json"))).toBe(false);
     expect(await session.captureFullScrollback()).not.toContain("Signed in with Codex.");
-    expect(readFileSync(stderrPath, "utf8")).toBe("");
-  },
-  60_000,
-);
-
-tmuxTest(
-  "login menu lists registered custom providers and presets for direct pickup",
-  async () => {
-    home = mkdtempSync(join(tmpdir(), "fx-tui-login-providers-"));
-    stderrPath = join(home, "stderr.log");
-    writeFileSync(stderrPath, "");
-    gateway = startFakeGateway([]);
-    oauth = startFakeOAuth(ACQUIRED_LOGIN_TOKEN, undefined, 3600, 1, {});
-    mkdirSync(join(home, ".fx"), { recursive: true });
-    writeFileSync(
-      join(home, ".fx", "providers.json"),
-      JSON.stringify({
-        providers: [
-          {
-            name: "ollama",
-            base_url: "http://localhost:11434/v1",
-            keyless: true,
-            models: [{ id: "llama3.2" }],
-          },
-        ],
-      }),
-    );
-
-    session = await startFx(home, stderrPath, gateway, oauth.issuerUrl);
-    await session.waitForComposer(TIMEOUT);
-    await session.resizeWindow(100, 48);
-
-    // The sign-in menu lists the registered provider directly, and presets
-    // appear further down without a description.
-    await session.sendText("/login");
-    await session.waitForText("Sign in with Codex", TIMEOUT);
-    const topRows = await session.waitForPane(
-      (pane) => pane.includes("Sign in with Vercel") && pane.includes("Ollama"),
-      TIMEOUT,
-    );
-    expect(topRows).toContain("available");
-
-    // Selecting the registered keyless provider switches without a key entry.
-    await session.sendKeys("Down");
-    await session.sendKeys("Down");
-    await session.sendKeys("Down");
-    await session.sendKeys("Down");
-    await session.sendKeys("Enter");
-    await session.waitForText("Switched to Ollama (custom provider)", TIMEOUT);
-
-    // Reopening the menu, a preset row (index 6: after the four built-in rows,
-    // the registered provider, and the first preset opencode-go) registers the
-    // provider and opens the masked key entry.
-    await session.sendText("/login");
-    await session.waitForText("Sign in with Codex", TIMEOUT);
-    for (let i = 0; i < 6; i++) await session.sendKeys("Down");
-    await session.sendKeys("Enter");
-    await session.waitForText("Paste the OpenRouter API key", TIMEOUT);
-    const registered = JSON.parse(
-      readFileSync(join(home, ".fx", "providers.json"), "utf8"),
-    );
-    const openrouter = registered.providers.find(
-      (entry: { name: string }) => entry.name === "openrouter",
-    );
-    expect(openrouter).toBeDefined();
-    expect(openrouter.api_key_env).toBe("OPENROUTER_API_KEY");
-
-    await session.sendKeys("C-c");
-    await session.waitForComposer(TIMEOUT);
-    expect(session.isAlive()).toBe(true);
     expect(readFileSync(stderrPath, "utf8")).toBe("");
   },
   60_000,
@@ -1277,11 +1218,11 @@ tmuxTest(
       (request) => request.path === "/oauth/authorize",
     ).length;
     const settingsPath = join(home, ".fx", "settings.json");
-    const gatewayModelBefore = JSON.parse(readFileSync(settingsPath, "utf8")).model;
+    const gatewayModelBefore = JSON.parse(readFileSync(settingsPath, "utf8")).models.gateway;
     expect(typeof gatewayModelBefore).toBe("string");
     const savedCodex = JSON.parse(readFileSync(settingsPath, "utf8"));
-    expect(savedCodex.model).toBe(gatewayModelBefore);
-    expect(savedCodex.codex_model).toBe("gpt-5.6-sol");
+    expect(savedCodex.models.gateway).toBe(gatewayModelBefore);
+    expect(savedCodex.models.codex).toBe("gpt-5.6-sol");
     await session.sendText("/quit");
     await session.waitForSessionEnd(TIMEOUT);
     session = null;
@@ -1306,16 +1247,16 @@ tmuxTest(
     await session.waitForText("Switched to Vercel AI Gateway", TIMEOUT);
     const savedGateway = JSON.parse(readFileSync(settingsPath, "utf8"));
     expect(savedGateway.provider).toBe("gateway");
-    expect(savedGateway.model).toBe(gatewayModelBefore);
-    expect(savedGateway.codex_model).toBe("gpt-5.6-sol");
+    expect(savedGateway.models.gateway).toBe(gatewayModelBefore);
+    expect(savedGateway.models.codex).toBe("gpt-5.6-sol");
     await openProviderPicker(session);
     await session.sendKeys("Down");
     await session.sendKeys("Enter");
     await session.waitForText("Switched to Codex subscription", TIMEOUT);
     const restoredCodex = JSON.parse(readFileSync(settingsPath, "utf8"));
     expect(restoredCodex.provider).toBe("codex");
-    expect(restoredCodex.model).toBe(gatewayModelBefore);
-    expect(restoredCodex.codex_model).toBe("gpt-5.6-sol");
+    expect(restoredCodex.models.gateway).toBe(gatewayModelBefore);
+    expect(restoredCodex.models.codex).toBe("gpt-5.6-sol");
     expect(chatgptOauth.requests.filter((request) => request.path === "/oauth/authorize"))
       .toHaveLength(authorizeRequestsBeforeRoundTrip);
     await session.sendText("/logout codex");
@@ -1333,7 +1274,7 @@ tmuxTest(
     await session.waitForText("Switched to Codex subscription with gpt-5.4-mini.", TIMEOUT);
     const reauthenticated = JSON.parse(readFileSync(settingsPath, "utf8"));
     expect(reauthenticated.provider).toBe("codex");
-    expect(reauthenticated.codex_model).toBe("gpt-5.4-mini");
+    expect(reauthenticated.models.codex).toBe("gpt-5.4-mini");
     expect(chatgptOauth.requests.filter((request) => request.path === "/oauth/authorize"))
       .toHaveLength(authorizeRequestsBeforeRoundTrip + 1);
     await session.sendKeys("C-c");
@@ -1363,7 +1304,9 @@ tmuxTest(
     );
     await session.waitForComposer(TIMEOUT);
     await session.sendText("/login");
-    await session.waitForText("Sign in with Codex", TIMEOUT);
+    await session.waitForText("Connections", TIMEOUT);
+    await session.sendKeys("Enter");
+    await session.waitForText("Codex subscription", TIMEOUT);
     await session.sendKeys("Down");
     await session.sendKeys("Enter");
     await completeDisplayedCodexLogin(session, chatgptOauth);
@@ -1371,7 +1314,7 @@ tmuxTest(
 
     const selected = JSON.parse(readFileSync(join(home, ".fx", "settings.json"), "utf8"));
     expect(selected.provider).toBe("codex");
-    expect(selected.codex_model).toBe("gpt-5.6-sol");
+    expect(selected.models.codex).toBe("gpt-5.6-sol");
     await session.sendText("/status");
     await session.waitForText("model_source=Codex subscription", TIMEOUT);
     expect(readFileSync(stderrPath, "utf8")).toBe("");
@@ -1438,19 +1381,22 @@ tmuxTest(
     const root = await session.waitForPane(
       (pane) =>
         pane.includes("Setup") &&
-        pane.includes("Sign in with Vercel") &&
-        pane.includes("Sign in with Codex") &&
-        pane.includes("Sign in with Grok") &&
-        pane.includes("API key"),
+        pane.includes("Connections") &&
+        pane.includes("Model provider") &&
+        pane.includes("Vercel team") &&
+        pane.includes("Credential source"),
       TIMEOUT,
     );
-    expect(root).not.toContain("AI_GATEWAY_API_KEY");
-    expect(root).not.toContain("ax login");
+    expect(root).toContain("AI_GATEWAY_API_KEY");
+    expect(root).not.toContain("fx login");
+    expect(root).not.toContain("Vercel account");
 
+    await session.sendKeys("Enter");
+    await session.waitForText("Vercel account", TIMEOUT);
     await session.sendKeys("Enter");
     await session.waitForText("Enter reopens browser · Esc cancels", TIMEOUT);
     await session.sendKeys("Escape");
-    await session.waitForText("Setup", TIMEOUT);
+    await session.waitForText("Connections", TIMEOUT);
 
     await session.sendKeys("Down");
     await session.sendKeys("Down");
@@ -1459,35 +1405,75 @@ tmuxTest(
     const apiKey = await session.waitForText("Paste your AI Gateway API key", TIMEOUT);
     expect(apiKey).toContain("Saves to");
     await session.sendKeys("Escape");
-    await session.waitForText("Setup", TIMEOUT);
-
-    // The provider rows (presets and registered customs) sit between API key
-    // and the management rows; Switch provider is at index 16, thirteen rows
-    // below API key.
-    for (let index = 0; index < 13; index += 1) {
-      await session.sendKeys("Down");
-    }
-    await session.sendKeys("Enter");
-    await session.waitForText("Switch provider", TIMEOUT);
+    await session.waitForText("Connections", TIMEOUT);
     await session.sendKeys("Escape");
     await session.waitForText("Setup", TIMEOUT);
 
     await session.sendKeys("Down");
     await session.sendKeys("Enter");
-    await session.waitForText("Choose a Vercel team", TIMEOUT);
+    await session.waitForPane(
+      (pane) => pane.includes("Model provider") && pane.includes("Grok subscription"),
+      TIMEOUT,
+    );
     await session.sendKeys("Escape");
-    await session.waitForText("Switch credential", TIMEOUT);
+    await session.waitForText("Setup", TIMEOUT);
 
     await session.sendKeys("Down");
     await session.sendKeys("Enter");
-    const sources = await session.waitForText("Use this credential", TIMEOUT);
+    await session.waitForText("Vercel team · Search:", TIMEOUT);
+    await session.sendKeys("Escape");
+    await session.waitForText("Credential source", TIMEOUT);
+
+    await session.sendKeys("Down");
+    await session.sendKeys("Enter");
+    const sources = await session.waitForPane(
+      (pane) => pane.includes("Credential source") && pane.includes("Automatic"),
+      TIMEOUT,
+    );
     expect(sources).toContain("AI_GATEWAY_API_KEY");
-    expect(sources).toContain("ax login");
+    expect(sources).toContain("fx login");
     await session.sendKeys("Escape");
     await session.sendKeys("Escape");
     await session.waitForComposer(TIMEOUT);
 
     expect(session.isAlive()).toBe(true);
+    expect(readFileSync(stderrPath, "utf8")).toBe("");
+  },
+  60_000,
+);
+
+tmuxTest(
+  "first-run Vercel team Escape continues into the setup hub",
+  async () => {
+    home = mkdtempSync(join(tmpdir(), "fx-tui-onboarding-team-back-"));
+    stderrPath = join(home, "stderr.log");
+    writeFileSync(stderrPath, "");
+    gateway = startFakeGateway([]);
+    oauth = startFakeOAuth(
+      ACQUIRED_LOGIN_TOKEN,
+      undefined,
+      3600,
+      Number.POSITIVE_INFINITY,
+      {
+        teams: [{ id: "team_123", slug: "vercel-labs", name: "Vercel Labs" }],
+      },
+    );
+
+    session = await startFx(home, stderrPath, gateway, oauth.issuerUrl, undefined, {
+      AI_GATEWAY_API_KEY: undefined,
+      FX_SKIP_ONBOARDING: "0",
+    });
+    await session.waitForText("Welcome to fx", TIMEOUT);
+    await session.sendKeys("Enter");
+    await session.waitForText("Vercel team · Search:", TIMEOUT);
+    await session.sendKeys("Escape");
+    const setup = await session.waitForPane(
+      (pane) => pane.includes("Setup") && /Connections\s+connected/.test(pane),
+      TIMEOUT,
+    );
+    expect(setup).toMatch(/^› Vercel team\s+choose a team$/m);
+    expect(setup).not.toContain("Welcome to fx");
+    expect(setup).not.toContain("sign in to manage");
     expect(readFileSync(stderrPath, "utf8")).toBe("");
   },
   60_000,
@@ -1546,25 +1532,23 @@ async function waitForTrace(tracePath: string, needle: string): Promise<void> {
 }
 
 async function enterSwitchCredential(pickerSession: TmuxSession): Promise<void> {
-  // Root menu: 4 built-in rows, then 12 preset/custom provider rows, then
-  // Switch provider (16) and Change team (17) before Switch credential (18).
-  for (let index = 0; index < 18; index += 1) {
-    await pickerSession.sendKeys("Down");
-  }
+  await pickerSession.sendKeys("Up");
   await pickerSession.sendKeys("Enter");
-  await pickerSession.waitForText("Use this credential", TIMEOUT);
+  await pickerSession.waitForPane(
+    (pane) => pane.includes("Credential source") && pane.includes("Automatic"),
+    TIMEOUT,
+  );
 }
 
 async function openProviderPicker(pickerSession: TmuxSession): Promise<void> {
   await pickerSession.sendText("/setup");
   await pickerSession.waitForText("Setup", TIMEOUT);
-  // Root menu: 4 built-in rows, then 12 preset/custom provider rows; the
-  // Switch provider row sits at index 16 and wraps its own stage below.
-  for (let index = 0; index < 16; index += 1) {
-    await pickerSession.sendKeys("Down");
-  }
+  await pickerSession.sendKeys("Down");
   await pickerSession.sendKeys("Enter");
-  await pickerSession.waitForText("Switch provider", TIMEOUT);
+  await pickerSession.waitForPane(
+    (pane) => pane.includes("Model provider") && pane.includes("Grok subscription"),
+    TIMEOUT,
+  );
 }
 
 async function openSwitchCredential(pickerSession: TmuxSession): Promise<void> {
@@ -1596,7 +1580,9 @@ profileStoredKeyTmuxTest(
     await session.waitForText("auth=AI_GATEWAY_API_KEY", TIMEOUT);
 
     await session.sendText("/setup");
-    await session.waitForText("API key", TIMEOUT);
+    await session.waitForText("Connections", TIMEOUT);
+    await session.sendKeys("Enter");
+    await session.waitForText("AI Gateway API key", TIMEOUT);
     await session.sendKeys("Down");
     await session.sendKeys("Down");
     await session.sendKeys("Down");
@@ -1605,6 +1591,11 @@ profileStoredKeyTmuxTest(
     await session.sendLiteralText(STORED_TOKEN);
     await session.sendKeys("Enter");
     await session.waitForText("Saved the API key to profile file and made it active", TIMEOUT);
+    const returnedConnections = await session.waitForPane(
+      (pane) => pane.includes("Connections") && pane.includes("AI Gateway API key"),
+      TIMEOUT,
+    );
+    expect(returnedConnections).toMatch(/^› AI Gateway API key\s+stored$/m);
     await session.sendText("/status");
     await session.waitForText("auth=stored API key (profile file)", TIMEOUT);
     expect(savedCredentialSource(home)).toBe("stored_key");
@@ -1650,11 +1641,13 @@ tmuxTest(
     await session.waitForText("auth=AI_GATEWAY_API_KEY", TIMEOUT);
 
     await session.sendText("/login");
-    await session.waitForText("Sign in with Codex", TIMEOUT);
+    await session.waitForText("Connections", TIMEOUT);
+    await session.sendKeys("Enter");
+    await session.waitForText("Vercel account", TIMEOUT);
     await session.sendKeys("Enter");
     await session.waitForText("Signed in to Vercel", TIMEOUT);
     await session.sendText("/status");
-    await session.waitForText("auth=ax login", TIMEOUT);
+    await session.waitForText("auth=fx login", TIMEOUT);
     expect(savedCredentialSource(home)).toBe("fx_login");
     await session.sendText("use the direct login credential");
     await session.waitForText(DIRECT_LOGIN_RESPONSE, TIMEOUT);
@@ -1666,7 +1659,7 @@ tmuxTest(
     session = await startFx(home, stderrPath, gateway, oauth.issuerUrl);
     await session.waitForComposer(TIMEOUT);
     await session.sendText("/status");
-    await session.waitForText("auth=ax login", TIMEOUT);
+    await session.waitForText("auth=fx login", TIMEOUT);
     await session.sendText("use the remembered direct login credential");
     await session.waitForText(RESTART_RESPONSE, TIMEOUT);
     expect(gateway.requests[1].headers.get("authorization")).toBe(
@@ -1696,7 +1689,7 @@ tmuxTest(
 );
 
 tmuxTest(
-  "Change team activates and persists ax login ahead of the environment",
+  "Change team activates and persists fx login ahead of the environment",
   async () => {
     home = mkdtempSync(join(tmpdir(), "fx-tui-team-preference-"));
     stderrPath = join(home, "stderr.log");
@@ -1720,17 +1713,14 @@ tmuxTest(
 
     await session.sendText("/setup");
     await session.waitForText("Setup", TIMEOUT);
-    // Root menu: 4 built-in rows, 12 preset/custom provider rows, then
-    // Switch provider; Change team sits at index 17.
-    for (let index = 0; index < 17; index += 1) {
-      await session.sendKeys("Down");
-    }
+    await session.sendKeys("Down");
+    await session.sendKeys("Down");
     await session.sendKeys("Enter");
-    await session.waitForText("Choose a Vercel team", TIMEOUT);
+    await session.waitForText("Vercel team · Search:", TIMEOUT);
     await session.sendKeys("Enter");
     await session.waitForText("Changed Vercel team to Vercel Labs", TIMEOUT);
     await session.sendText("/status");
-    await session.waitForText("auth=ax login", TIMEOUT);
+    await session.waitForText("auth=fx login", TIMEOUT);
     expect(savedCredentialSource(home)).toBe("fx_login");
 
     const savedAuth = JSON.parse(readFileSync(join(home, ".fx", "auth.json"), "utf8")) as {
@@ -1744,7 +1734,7 @@ tmuxTest(
     session = await startFx(home, stderrPath, gateway, oauth.issuerUrl);
     await session.waitForComposer(TIMEOUT);
     await session.sendText("/status");
-    await session.waitForText("auth=ax login", TIMEOUT);
+    await session.waitForText("auth=fx login", TIMEOUT);
     await session.sendText("use the selected team after restart");
     await session.waitForText(LOGIN_RESPONSE, TIMEOUT);
     expect(gateway.requests[0].headers.get("authorization")).toBe(`Bearer ${LOGIN_TOKEN}`);
@@ -1755,7 +1745,7 @@ tmuxTest(
 );
 
 tmuxTest(
-  "API key and ax login coexist through selection, restart, login, and logout",
+  "API key and fx login coexist through selection, restart, login, and logout",
   async () => {
     home = mkdtempSync(join(tmpdir(), "fx-tui-auth-lifecycle-"));
     stderrPath = join(home, "stderr.log");
@@ -1787,7 +1777,7 @@ tmuxTest(
 
     await openSwitchCredential(session);
     const inventory = await session.waitForPane(
-      (pane) => pane.includes("AI_GATEWAY_API_KEY") && pane.includes("ax login"),
+      (pane) => pane.includes("AI_GATEWAY_API_KEY") && pane.includes("fx login"),
       TIMEOUT,
     );
     expect(inventory).not.toContain("VERCEL_OIDC_TOKEN");
@@ -1796,7 +1786,7 @@ tmuxTest(
     await session.sendKeys("Down");
     await session.sendKeys("Enter");
     await session.sendText("/status");
-    await session.waitForText("auth=ax login", TIMEOUT);
+    await session.waitForText("auth=fx login", TIMEOUT);
     expect(readFileSync(authPath, "utf8")).toBe(seededAuthFile);
     await session.sendText("use the selected login credential");
     await session.waitForText(LOGIN_RESPONSE, TIMEOUT);
@@ -1810,9 +1800,9 @@ tmuxTest(
     session = await startFx(home, stderrPath, gateway, oauth.issuerUrl);
     await session.waitForComposer(TIMEOUT);
     await session.sendText("/status");
-    // The switch above is remembered, so the restart keeps ax login rather than
+    // The switch above is remembered, so the restart keeps fx login rather than
     // letting AI_GATEWAY_API_KEY reclaim it through precedence.
-    await session.waitForText("auth=ax login", TIMEOUT);
+    await session.waitForText("auth=fx login", TIMEOUT);
     expect(readFileSync(authPath, "utf8")).toBe(seededAuthFile);
     await session.sendText("use the remembered credential after restart");
     await session.waitForText(RESTART_RESPONSE, TIMEOUT);
@@ -1820,7 +1810,9 @@ tmuxTest(
     expect(gateway.requests[2].headers.get("authorization")).toBe(`Bearer ${LOGIN_TOKEN}`);
 
     await session.sendText("/login");
-    await session.waitForText("Sign in with Codex", TIMEOUT);
+    await session.waitForText("Connections", TIMEOUT);
+    await session.sendKeys("Enter");
+    await session.waitForText("Vercel account", TIMEOUT);
     await session.sendKeys("Enter");
     const loginCompleted = await session.waitForText("Signed in to Vercel", TIMEOUT);
     expect(loginCompleted).not.toContain("Setup");
@@ -1849,14 +1841,14 @@ tmuxTest(
     ).toHaveLength(1);
 
     await session.sendText("/status");
-    await session.waitForText("auth=ax login", TIMEOUT);
+    await session.waitForText("auth=fx login", TIMEOUT);
     await session.sendText("direct login prompt");
     await session.waitForText(DIRECT_LOGIN_RESPONSE, TIMEOUT);
     expect(gateway.requests).toHaveLength(4);
     expect(gateway.requests[3].headers.get("authorization")).toBe(`Bearer ${ACQUIRED_LOGIN_TOKEN}`);
 
     await session.sendText("/logout");
-    const loggedOut = await session.waitForText("Signed out of ax.", TIMEOUT);
+    const loggedOut = await session.waitForText("Signed out of fx.", TIMEOUT);
     expect(loggedOut).not.toContain("remote session could not be revoked");
     expect(existsSync(authPath)).toBe(false);
     expect(
@@ -1943,9 +1935,20 @@ tmuxTest(
     expect(gateway.modelRequests[0].headers.get("authorization")).toBeNull();
 
     await session.sendText("/login");
-    await session.waitForText("Sign in with Codex", TIMEOUT);
+    await session.waitForText("Connections", TIMEOUT);
     await session.sendKeys("Enter");
-    await session.waitForText("Choose a Vercel team", TIMEOUT);
+    await session.waitForText("Vercel account", TIMEOUT);
+    await session.sendKeys("Enter");
+    await session.waitForText("Vercel team · Search:", TIMEOUT);
+    await session.sendKeys("Escape");
+    const setupAfterSignIn = await session.waitForPane(
+      (pane) => pane.includes("Setup") && /Connections\s+connected/.test(pane),
+      TIMEOUT,
+    );
+    expect(setupAfterSignIn).toMatch(/^› Vercel team\s+choose a team$/m);
+    expect(setupAfterSignIn).not.toContain("sign in to manage");
+    await session.sendKeys("Enter");
+    await session.waitForText("Vercel team · Search:", TIMEOUT);
     await session.resizeWindow(80, 5);
     await session.sendLiteralText("example");
     await session.waitForPane((pane) => pane.includes("Search: example"), TIMEOUT);
@@ -1962,7 +1965,7 @@ tmuxTest(
     await session.resizeWindow(80, 24);
     await session.waitForPane(
       (pane) =>
-        pane.includes("Choose a Vercel team") &&
+        pane.includes("Vercel team · Search:") &&
         pane.includes("Search: example") &&
         pane.includes("Example Internal Team") &&
         !pane.includes("Other Team"),
@@ -2025,7 +2028,7 @@ tmuxTest(
 
     await openSwitchCredential(session);
     await session.waitForPane(
-      (pane) => pane.includes("AI_GATEWAY_API_KEY") && pane.includes("ax login"),
+      (pane) => pane.includes("AI_GATEWAY_API_KEY") && pane.includes("fx login"),
       TIMEOUT,
     );
     await session.sendKeys("Down");
@@ -2036,7 +2039,7 @@ tmuxTest(
     expect(gateway.modelRequests[1].headers.get("x-vercel-ai-gateway-team")).toBeNull();
 
     await session.sendText("/logout");
-    await session.waitForText("Signed out of ax.", TIMEOUT);
+    await session.waitForText("Signed out of fx.", TIMEOUT);
     await waitForModelRequestCount(gateway, 3);
     expect(gateway.modelRequests).toHaveLength(3);
     expect(gateway.modelRequests[2].headers.get("authorization")).toBe(`Bearer ${ENV_TOKEN}`);
@@ -2046,7 +2049,7 @@ tmuxTest(
 );
 
 test(
-  "ax login falls back once when a custom OAuth client is invalid",
+  "fx login falls back once when a custom OAuth client is invalid",
   async () => {
     home = mkdtempSync(join(tmpdir(), "fx-tui-login-client-fallback-"));
     writeSeededFxLogin(home);
@@ -2114,7 +2117,7 @@ test(
 test(
   "Codex CLI browser login fetches raw models and replays one 401 without Gateway leakage",
   async () => {
-    home = mkdtempSync(join(tmpdir(), "ax-codex-cli-login-"));
+    home = mkdtempSync(join(tmpdir(), "fx-codex-cli-login-"));
     gateway = startFakeGateway([]);
     chatgptOauth = startFakeChatGptOAuth({ unauthorizedResponses: 1 });
     const env = {
@@ -2142,7 +2145,7 @@ test(
     const settingsPath = join(home, ".fx", "settings.json");
     const selected = JSON.parse(readFileSync(settingsPath, "utf8"));
     expect(selected.provider).toBe("codex");
-    expect(selected.codex_model).toBe("gpt-5.6-sol");
+    expect(selected.models.codex).toBe("gpt-5.6-sol");
 
     const models = await runFx(["models", "--json"], { env, timeoutMs: TIMEOUT });
     const modelIds = (JSON.parse(models.stdout) as { models: Array<{ id: string }> }).models
@@ -2211,7 +2214,7 @@ test(
 test(
   "Grok CLI browser login fetches subscription models and replays one account-stable 401",
   async () => {
-    home = mkdtempSync(join(tmpdir(), "ax-grok-cli-login-"));
+    home = mkdtempSync(join(tmpdir(), "fx-grok-cli-login-"));
     gateway = startFakeGateway([]);
     const grok = startFakeGrokOAuth({ unauthorizedResponses: 1 });
     try {
@@ -2238,7 +2241,7 @@ test(
       expect(statSync(authPath).mode & 0o077).toBe(0);
       const settings = JSON.parse(readFileSync(join(home, ".fx", "settings.json"), "utf8"));
       expect(settings.provider).toBe("grok");
-      expect(settings.grok_model).toBe("grok-4.20");
+      expect(settings.models.grok).toBe("grok-4.20");
 
       const models = await runFx(["models", "--json"], { env, timeoutMs: TIMEOUT });
       const modelIds = (JSON.parse(models.stdout) as { models: Array<{ id: string }> }).models
@@ -2302,8 +2305,41 @@ test(
   60_000,
 );
 
+test(
+  "Grok CLI accepts an authorization code copied from the browser",
+  async () => {
+    home = mkdtempSync(join(tmpdir(), "fx-grok-cli-code-"));
+    gateway = startFakeGateway([]);
+    const grok = startFakeGrokOAuth();
+    try {
+      const result = await runGrokLoginWithBrowser({
+        HOME: home,
+        AI_GATEWAY_API_KEY: ENV_TOKEN,
+        VERCEL_OIDC_TOKEN: undefined,
+        FX_DISABLE_KEYCHAIN: "1",
+        FX_SKIP_ONBOARDING: "1",
+        FX_AUTO_UPGRADE: "0",
+        FX_NO_OPEN_BROWSER: "1",
+        FX_GATEWAY_BASE_URL: gateway.baseUrl,
+        FX_E2E_GATEWAY_MODELS_URL: `${gateway.baseUrl}/coding-agent/v1/models`,
+        ...grok.env,
+      }, "grok-code");
+
+      expect(result.code, `stdout: ${result.stdout}\nstderr: ${result.stderr}`).toBe(0);
+      expect(result.stdout).toContain("Signed in with Grok.");
+      expect(result.stdout).not.toContain("grok-code");
+      expect(result.stderr).toBe("");
+      expect(grok.tokenCalls()).toBe(1);
+      expect(existsSync(join(home, ".fx", "grok-auth.json"))).toBe(true);
+    } finally {
+      grok.stop();
+    }
+  },
+  15_000,
+);
+
 test("Grok logout removes local credentials when remote revocation fails", async () => {
-  home = mkdtempSync(join(tmpdir(), "ax-grok-logout-revoke-failure-"));
+  home = mkdtempSync(join(tmpdir(), "fx-grok-logout-revoke-failure-"));
   const grok = startFakeGrokOAuth({ revokeStatus: 503 });
   try {
     writeSeededGrokLogin(home, grok.initialAccessToken);
@@ -2333,14 +2369,14 @@ test("Grok logout removes local credentials when remote revocation fails", async
       timeoutMs: TIMEOUT,
     });
     expect(ask.code).toBe(1);
-    expect(ask.stderr).toContain("ax login grok");
+    expect(ask.stderr).toContain("fx login grok");
   } finally {
     grok.stop();
   }
 });
 
 test("Grok 401 replay refuses a different account before the second provider send", async () => {
-  home = mkdtempSync(join(tmpdir(), "ax-grok-account-mismatch-"));
+  home = mkdtempSync(join(tmpdir(), "fx-grok-account-mismatch-"));
   gateway = startFakeGateway([]);
   const grok = startFakeGrokOAuth({ unauthorizedResponses: 1, userinfoSub: "acct_other" });
   try {
@@ -2381,7 +2417,7 @@ test("Grok 401 replay refuses a different account before the second provider sen
 });
 
 test("Grok CLI sends verified images directly without advertising the vision fallback", async () => {
-  home = mkdtempSync(join(tmpdir(), "ax-grok-native-image-"));
+  home = mkdtempSync(join(tmpdir(), "fx-grok-native-image-"));
   gateway = startFakeGateway([]);
   const grok = startFakeGrokOAuth();
   try {
@@ -2428,7 +2464,7 @@ test("Grok CLI sends verified images directly without advertising the vision fal
 tmuxTest(
   "interactive Grok login activates Grok and setup round-trips without reauthentication",
   async () => {
-    home = mkdtempSync(join(tmpdir(), "ax-grok-tui-switch-"));
+    home = mkdtempSync(join(tmpdir(), "fx-grok-tui-switch-"));
     stderrPath = join(home, "stderr.log");
     gateway = startFakeGateway([fakeGatewayFinalText("GATEWAY_AFTER_GROK")]);
     const grok = startFakeGrokOAuth();
@@ -2440,7 +2476,9 @@ tmuxTest(
       await session.waitForText("auto ·", TIMEOUT);
 
       await session.sendText("/login");
-      await session.waitForText("Sign in with Grok", TIMEOUT);
+      await session.waitForText("Connections", TIMEOUT);
+      await session.sendKeys("Enter");
+      await session.waitForText("Grok subscription", TIMEOUT);
       await session.sendKeys("Down");
       await session.sendKeys("Down");
       await session.sendKeys("Enter");
@@ -2462,11 +2500,11 @@ tmuxTest(
       await session.waitForText("Switched to Grok subscription with grok-4.20.", TIMEOUT);
       const settingsPath = join(home, ".fx", "settings.json");
       const persistenceDeadline = Date.now() + TIMEOUT;
-      let saved: { provider: string; grok_model: string } | undefined;
+      let saved: { provider: string; models: { grok: string } } | undefined;
       while (Date.now() < persistenceDeadline) {
         saved = JSON.parse(readFileSync(settingsPath, "utf8")) as {
           provider: string;
-          grok_model: string;
+          models: { grok: string };
         };
         if (saved.provider === "grok") break;
         await Bun.sleep(25);
@@ -2474,7 +2512,7 @@ tmuxTest(
       expect(saved).toBeDefined();
       expect(grok.tokenCalls()).toBe(tokenCallsAfterLogin);
       expect(saved!.provider).toBe("grok");
-      expect(saved!.grok_model).toBe("grok-4.20");
+      expect(saved!.models.grok).toBe("grok-4.20");
       const responses = grok.requests.filter((request) => request.path === "/v1/responses");
       expect(responses).toHaveLength(1);
       expect(responses[0]!.conversationId).toBeTruthy();
@@ -2487,9 +2525,59 @@ tmuxTest(
 );
 
 tmuxTest(
+  "interactive Grok login accepts a bracketed-paste authorization code",
+  async () => {
+    home = mkdtempSync(join(tmpdir(), "fx-grok-tui-code-"));
+    stderrPath = join(home, "stderr.log");
+    gateway = startFakeGateway([]);
+    const grok = startFakeGrokOAuth();
+    try {
+      session = await startFx(home, stderrPath, gateway, undefined, undefined, {
+        FX_MODEL: undefined,
+        ...grok.env,
+      });
+      await session.waitForComposer(TIMEOUT);
+      await session.sendText("/login");
+      await session.waitForText("Connections", TIMEOUT);
+      await session.sendKeys("Enter");
+      await session.waitForText("Grok subscription", TIMEOUT);
+      await session.sendKeys("Down");
+      await session.sendKeys("Down");
+      await session.sendKeys("Enter");
+      await session.waitForText("Paste the code shown by xAI", TIMEOUT);
+      await session.resizeWindow(80, 5);
+      const compactEntry = await session.waitForPane(
+        (pane) =>
+          pane.includes("Paste or type the code") &&
+          pane.includes("Enter submits") &&
+          pane.includes("Esc cancels"),
+        TIMEOUT,
+      );
+      expect(compactEntry).not.toContain("Paste the code shown by xAI");
+      await session.pasteText("grok-code");
+      await session.waitForPane(
+        (pane) => pane.includes("•••••••••") && pane.includes("Enter submits"),
+        TIMEOUT,
+      );
+      await session.sendKeys("Enter");
+      await session.waitForText("Switched to Grok subscription with grok-4.20.", TIMEOUT);
+
+      const scrollback = await session.captureFullScrollback();
+      expect(scrollback).not.toContain("grok-code");
+      expect(grok.tokenCalls()).toBe(1);
+      expect(existsSync(join(home, ".fx", "grok-auth.json"))).toBe(true);
+      expect(readFileSync(stderrPath, "utf8")).toBe("");
+    } finally {
+      grok.stop();
+    }
+  },
+  60_000,
+);
+
+tmuxTest(
   "Grok model selection uses provider-advertised context and effort metadata",
   async () => {
-    home = mkdtempSync(join(tmpdir(), "ax-grok-effort-selection-"));
+    home = mkdtempSync(join(tmpdir(), "fx-grok-effort-selection-"));
     stderrPath = join(home, "stderr.log");
     gateway = startFakeGateway([]);
     const grok = startFakeGrokOAuth();
@@ -2536,7 +2624,7 @@ tmuxTest(
 tmuxTest(
   "Grok resource exhaustion stays on-provider and leaves later input usable",
   async () => {
-    home = mkdtempSync(join(tmpdir(), "ax-grok-resource-recovery-"));
+    home = mkdtempSync(join(tmpdir(), "fx-grok-resource-recovery-"));
     stderrPath = join(home, "stderr.log");
     gateway = startFakeGateway([]);
     const grok = startFakeGrokResourceRecovery();
@@ -2577,7 +2665,7 @@ tmuxTest(
 test(
   "ChatGPT tool loops round-trip encrypted reasoning without Gateway leakage",
   async () => {
-    home = mkdtempSync(join(tmpdir(), "ax-chatgpt-tool-loop-"));
+    home = mkdtempSync(join(tmpdir(), "fx-chatgpt-tool-loop-"));
     gateway = startFakeGateway([]);
     const codex = startFakeCodexToolLoop();
     try {
@@ -2622,7 +2710,7 @@ test(
 tmuxTest(
   "Codex remains usable beyond Gateway observation capacity in one process",
   async () => {
-    home = mkdtempSync(join(tmpdir(), "ax-codex-capacity-loop-"));
+    home = mkdtempSync(join(tmpdir(), "fx-codex-capacity-loop-"));
     stderrPath = join(home, "stderr.log");
     writeFileSync(stderrPath, "");
     gateway = startFakeGateway([]);
@@ -2660,7 +2748,7 @@ tmuxTest(
 test(
   "Grok tool loops round-trip encrypted reasoning without Gateway leakage",
   async () => {
-    home = mkdtempSync(join(tmpdir(), "ax-grok-tool-loop-"));
+    home = mkdtempSync(join(tmpdir(), "fx-grok-tool-loop-"));
     gateway = startFakeGateway([]);
     const grok = startFakeGrokToolLoop();
     try {
@@ -2706,7 +2794,7 @@ test(
 test(
   "Codex CLI login preserves durable auth but does not claim success when activation fails",
   async () => {
-    home = mkdtempSync(join(tmpdir(), "ax-codex-cli-activation-failure-"));
+    home = mkdtempSync(join(tmpdir(), "fx-codex-cli-activation-failure-"));
     gateway = startFakeGateway([]);
     chatgptOauth = startFakeChatGptOAuth();
     chatgptOauth.setModels([]);
@@ -2726,7 +2814,7 @@ test(
     const login = await runCodexLoginWithBrowser(env);
     expect(login.code).toBe(1);
     expect(login.stdout).not.toContain("Signed in with Codex.");
-    expect(login.stderr).toContain("ax login: could not load the target model catalog (malformed_response)");
+    expect(login.stderr).toContain("fx login: could not load the target model catalog (malformed_response)");
     expect(existsSync(join(home, ".fx", "chatgpt-auth.json"))).toBe(true);
     const settingsPath = join(home, ".fx", "settings.json");
     expect(existsSync(settingsPath)).toBe(false);
@@ -2737,7 +2825,7 @@ test(
 test(
   "Grok CLI login preserves durable auth but does not claim success when activation fails",
   async () => {
-    home = mkdtempSync(join(tmpdir(), "ax-grok-cli-activation-failure-"));
+    home = mkdtempSync(join(tmpdir(), "fx-grok-cli-activation-failure-"));
     gateway = startFakeGateway([]);
     const grok = startFakeGrokOAuth();
     grok.setModels([]);
@@ -2758,7 +2846,7 @@ test(
       const login = await runGrokLoginWithBrowser(env);
       expect(login.code).toBe(1);
       expect(login.stdout).not.toContain("Signed in with Grok.");
-      expect(login.stderr).toContain("ax login: target model catalog is empty");
+      expect(login.stderr).toContain("fx login: target model catalog is empty");
       expect(existsSync(join(home, ".fx", "grok-auth.json"))).toBe(true);
       expect(existsSync(join(home, ".fx", "settings.json"))).toBe(false);
     } finally {
@@ -2771,7 +2859,7 @@ test(
 test(
   "Codex rejects the vision fallback without another provider request",
   async () => {
-    home = mkdtempSync(join(tmpdir(), "ax-codex-vision-disabled-"));
+    home = mkdtempSync(join(tmpdir(), "fx-codex-vision-disabled-"));
     gateway = startFakeGateway([]);
     const codex = startFakeCodexToolLoop({
       toolName: "vision",
@@ -2827,7 +2915,7 @@ test(
 test(
   "Grok rejects the vision fallback because native image input owns OCR",
   async () => {
-    home = mkdtempSync(join(tmpdir(), "ax-grok-vision-disabled-"));
+    home = mkdtempSync(join(tmpdir(), "fx-grok-vision-disabled-"));
     gateway = startFakeGateway([]);
     const grok = startFakeGrokToolLoop({
       toolName: "vision",
@@ -2879,7 +2967,7 @@ test(
 test(
   "Codex automatic review uses gpt-5.4-mini while Gateway review stays untouched",
   async () => {
-    home = mkdtempSync(join(tmpdir(), "ax-codex-auto-review-"));
+    home = mkdtempSync(join(tmpdir(), "fx-codex-auto-review-"));
     gateway = startFakeGateway([]);
     const codex = startFakeCodexAutoReview();
     try {
@@ -2911,11 +2999,14 @@ test(
       expect(codex.bodies.map((body) => (JSON.parse(body) as { model: string }).model))
         .toEqual(["gpt-5.6-sol", "gpt-5.4-mini", "gpt-5.6-sol"]);
       expect(codex.bodies[1]).toContain('"name":"permission_decision"');
+      expect(codex.bodies[2]).toContain('"type":"function_call_output"');
+      expect(codex.bodies[2]).toContain("exit_code=0");
       for (const request of gateway.requests) {
         expect(request.body).not.toContain("permission_decision");
       }
       expect(readSingleUsageSnapshot(home)).toMatchObject({
         billing: "complete",
+        api_duration_complete: true,
         next_sequence: 1,
         settled_through_sequence: 0,
         pending: [],
@@ -2930,7 +3021,7 @@ test(
 test(
   "Grok automatic review reuses the admitted Grok model and never reaches Gateway",
   async () => {
-    home = mkdtempSync(join(tmpdir(), "ax-grok-auto-review-"));
+    home = mkdtempSync(join(tmpdir(), "fx-grok-auto-review-"));
     gateway = startFakeGateway([]);
     const grok = startFakeGrokAutoReview();
     try {
@@ -2963,6 +3054,8 @@ test(
       expect(grok.bodies.map((body) => (JSON.parse(body) as { model: string }).model))
         .toEqual(["grok-4.20", "grok-4.20", "grok-4.20"]);
       expect(grok.bodies[1]).toContain('"name":"permission_decision"');
+      expect(grok.bodies[2]).toContain('"type":"function_call_output"');
+      expect(grok.bodies[2]).toContain("exit_code=0");
       expect(grok.headers).toHaveLength(3);
       for (const headers of grok.headers) {
         expect(headers.tokenAuth).toBe("xai-grok-cli");
@@ -2977,6 +3070,7 @@ test(
       }
       expect(readSingleUsageSnapshot(home)).toMatchObject({
         billing: "complete",
+        api_duration_complete: true,
         next_sequence: 1,
         settled_through_sequence: 0,
         pending: [],
@@ -2989,7 +3083,7 @@ test(
 );
 
 test(
-  "ax login bounds invalid OAuth client fallback to two device requests",
+  "fx login bounds invalid OAuth client fallback to two device requests",
   async () => {
     home = mkdtempSync(join(tmpdir(), "fx-tui-login-client-fallback-failure-"));
     writeSeededFxLogin(home);
@@ -3032,7 +3126,7 @@ test(
     expect(deviceRequests[1].clientId).toBeDefined();
     expect(deviceRequests[1].clientId).not.toBe("test-client");
     expect(result.stdout).toBe("");
-    expect(result.stderr).toBe("ax login: failed to sign in\n");
+    expect(result.stderr).toBe("fx login: failed to sign in\n");
     expect(result.stderr).not.toContain(oauth.providerDetail);
     expect(readFileSync(authPath, "utf8")).toBe(seededAuthFile);
   },
@@ -3040,7 +3134,7 @@ test(
 );
 
 test(
-  "ax login does not fall back for another OAuth device error",
+  "fx login does not fall back for another OAuth device error",
   async () => {
     home = mkdtempSync(join(tmpdir(), "fx-tui-login-client-no-fallback-"));
     writeSeededFxLogin(home);
@@ -3080,7 +3174,7 @@ test(
     expect(deviceRequests).toHaveLength(1);
     expect(deviceRequests[0].clientId).toBe("test-client");
     expect(result.stdout).toBe("");
-    expect(result.stderr).toBe("ax login: failed to sign in\n");
+    expect(result.stderr).toBe("fx login: failed to sign in\n");
     expect(result.stderr).not.toContain(oauth.providerDetail);
     expect(readFileSync(authPath, "utf8")).toBe(seededAuthFile);
   },
@@ -3112,12 +3206,12 @@ tmuxTest(
     await session.sendText(" preserve this exact prompt");
     const blocked = await session.waitForPane(
       (pane) =>
-        pane.includes("ax needs access to Vercel AI Gateway") &&
+        pane.includes("Fx needs access to Vercel AI Gateway") &&
         pane.includes("preserve this exact prompt") &&
         pane.includes("Image 1"),
       TIMEOUT,
     );
-    expect(blocked).not.toContain("Welcome to ax");
+    expect(blocked).not.toContain("Welcome to fx");
     expect(blocked).not.toContain("Switch credential");
     expect(gateway.requests).toHaveLength(0);
     expect(session.isAlive()).toBe(true);
@@ -3149,19 +3243,19 @@ tmuxTest(
     await session.waitForComposer(TIMEOUT);
     await openSwitchCredential(session);
     await session.waitForPane(
-      (pane) => pane.includes("AI_GATEWAY_API_KEY") && pane.includes("ax login"),
+      (pane) => pane.includes("AI_GATEWAY_API_KEY") && pane.includes("fx login"),
       TIMEOUT,
     );
     await session.sendKeys("Down");
     await session.sendKeys("Enter");
-    await session.sendText("prove ax login is active before logout");
+    await session.sendText("prove fx login is active before logout");
     await session.waitForText(LOGIN_RESPONSE, TIMEOUT);
     expect(gateway.requests[0].headers.get("authorization")).toBe(`Bearer ${LOGIN_TOKEN}`);
 
     await session.sendText("/logout");
     const loggedOut = await session.waitForPane(
       (pane) =>
-        pane.includes("Signed out of ax.") &&
+        pane.includes("Signed out of fx.") &&
         pane.includes("remote session could not be revoked"),
       TIMEOUT,
     );
@@ -3175,10 +3269,10 @@ tmuxTest(
     await session.waitForText("auth=AI_GATEWAY_API_KEY", TIMEOUT);
     await openSwitchCredential(session);
     const inventory = await session.waitForPane(
-      (pane) => pane.includes("AI_GATEWAY_API_KEY") && pane.includes("Use this credential"),
+      (pane) => pane.includes("AI_GATEWAY_API_KEY") && pane.includes("Automatic"),
       TIMEOUT,
     );
-    expect(inventory).not.toMatch(/^\s+ax login\s+(?:current|available)\s*$/m);
+    expect(inventory).not.toMatch(/^\s+fx login\s+(?:current|available)\s*$/m);
     await session.sendKeys("Escape");
 
     await session.sendText("prove environment auth remains active");
@@ -3213,7 +3307,7 @@ tmuxTest(
 );
 
 tmuxTest(
-  "logout preserves an active API key when ax login is inactive",
+  "logout preserves an active API key when fx login is inactive",
   async () => {
     home = mkdtempSync(join(tmpdir(), "fx-tui-logout-inactive-login-"));
     stderrPath = join(home, "stderr.log");
@@ -3225,7 +3319,7 @@ tmuxTest(
     session = await startFx(home, stderrPath, gateway, oauth.issuerUrl);
     await session.waitForComposer(TIMEOUT);
     await session.sendText("/logout");
-    await session.waitForText("Signed out of ax.", TIMEOUT);
+    await session.waitForText("Signed out of fx.", TIMEOUT);
     expect(existsSync(join(home, ".fx", "auth.json"))).toBe(false);
 
     await session.sendText("/status");
@@ -3240,7 +3334,7 @@ tmuxTest(
 );
 
 tmuxTest(
-  "logout removes an ax login rejected for unsafe permissions",
+  "logout removes an fx login rejected for unsafe permissions",
   async () => {
     home = mkdtempSync(join(tmpdir(), "fx-tui-logout-rejected-login-"));
     stderrPath = join(home, "stderr.log");
@@ -3254,7 +3348,7 @@ tmuxTest(
     session = await startFx(home, stderrPath, gateway, oauth.issuerUrl);
     await session.waitForComposer(TIMEOUT);
     await session.sendText("/logout");
-    const loggedOut = await session.waitForText("Signed out of ax.", TIMEOUT);
+    const loggedOut = await session.waitForText("Signed out of fx.", TIMEOUT);
     expect(existsSync(authPath)).toBe(false);
 
     await session.sendText("/status");
@@ -3293,10 +3387,10 @@ tmuxTest(
 
     await session.sendText("/logout");
     const failed = await session.waitForText(
-      "Could not confirm durable ax logout. The active source was recalculated.",
+      "Could not confirm durable fx logout. The active source was recalculated.",
       TIMEOUT,
     );
-    expect(failed).not.toContain("Signed out of ax.");
+    expect(failed).not.toContain("Signed out of fx.");
     expect(failed).toContain(
       "Warning: signed out locally, but the remote session could not be revoked.",
     );
@@ -3327,7 +3421,7 @@ tmuxTest(
     });
     await session.waitForComposer(TIMEOUT);
     await session.sendText("/logout");
-    await session.waitForText("Signed out of ax.", TIMEOUT);
+    await session.waitForText("Signed out of fx.", TIMEOUT);
     await session.sendText("/status");
     await session.waitForText("auth=missing", TIMEOUT);
 
@@ -3335,15 +3429,16 @@ tmuxTest(
     const inventory = await session.waitForPane(
       (pane) =>
         pane.includes("Setup") &&
-        pane.includes("Sign in with Vercel") &&
-        pane.includes("Sign in with Grok") &&
-        pane.includes("API key") &&
+        pane.includes("Connections") &&
+        pane.includes("Model provider") &&
+        pane.includes("Vercel team") &&
+        pane.includes("Credential source"),
       TIMEOUT,
     );
-    expect(inventory).not.toMatch(/^\s+ax login\s+/m);
+    expect(inventory).not.toMatch(/^\s+fx login\s+/m);
     await session.sendKeys("Escape");
     await session.waitForPane(
-      (pane) => !pane.includes("   Setup"),
+      (pane) => !pane.includes("Connections") && !pane.includes("Routing"),
       TIMEOUT,
     );
 
@@ -3352,13 +3447,13 @@ tmuxTest(
     const picker = await session.waitForPane(
       (pane) =>
         pane.includes(prompt) &&
-        pane.includes("Welcome to ax") &&
+        pane.includes("Welcome to fx") &&
         pane.includes("Sign in with Vercel") &&
         pane.includes("Add an API key") &&
         pane.includes("Esc to set up later"),
       TIMEOUT,
     );
-    expect(picker).not.toMatch(/^\s+ax login\s+/m);
+    expect(picker).not.toMatch(/^\s+fx login\s+/m);
     expect(picker).not.toContain("Switch credential");
     expect(picker).not.toContain("Skip for now");
     expect(gateway.requests).toHaveLength(0);
@@ -3416,7 +3511,7 @@ tmuxTest(
     await session.waitForComposer(TIMEOUT);
     await openSwitchCredential(session);
     await session.waitForPane(
-      (pane) => pane.includes("AI_GATEWAY_API_KEY") && pane.includes("ax login"),
+      (pane) => pane.includes("AI_GATEWAY_API_KEY") && pane.includes("fx login"),
       TIMEOUT,
     );
     await session.sendKeys("Down");
@@ -3432,9 +3527,10 @@ tmuxTest(
     await session.sendKeys("Enter");
     const failed = await session.waitForPane(
       (pane) =>
-        pane.includes("ax login credential refresh failed.") &&
+        pane.includes("fx login credential refresh failed.") &&
         pane.includes("Choose another source below") &&
         pane.includes("Setup") &&
+        pane.includes("Model provider"),
       TIMEOUT,
     );
     expect(failed).toContain(`${promptHead}${promptTail}`);
@@ -3452,7 +3548,7 @@ tmuxTest(
     const preserved = await session.waitForPane(
       (pane) =>
         pane.includes(`${promptHead}${promptTail}`) &&
-        !pane.includes("current: ax login"),
+        !pane.includes("current: fx login"),
       TIMEOUT,
     );
     expect(preserved).toContain(`${promptHead}${promptTail}`);
@@ -3667,14 +3763,15 @@ tmuxTest(
     await session.waitForPane(
       (pane) =>
         pane.includes(blockedPrompt) &&
-        pane.includes("ax login credential refresh failed.") &&
+        pane.includes("fx login credential refresh failed.") &&
+        pane.includes("Model provider"),
       TIMEOUT,
     );
     expect(gateway.requests).toHaveLength(0);
 
     await session.sendKeys("Escape");
     await session.waitForPane(
-      (pane) => pane.includes(blockedPrompt) && !pane.includes("   Setup"),
+      (pane) => pane.includes(blockedPrompt) && !pane.includes("Connections"),
       TIMEOUT,
     );
     await session.sendKeys("C-u");
@@ -3738,7 +3835,8 @@ tmuxTest(
     const firstFailure = await session.waitForPane(
       (pane) =>
         pane.includes(firstPrompt) &&
-        pane.includes("ax login credential refresh failed.") &&
+        pane.includes("fx login credential refresh failed.") &&
+        pane.includes("Model provider"),
       TIMEOUT,
     );
     expect(firstFailure).toContain("Choose another source below.");
@@ -3751,7 +3849,7 @@ tmuxTest(
 
     await session.sendKeys("Escape");
     await session.waitForPane(
-      (pane) => pane.includes(firstPrompt) && !pane.includes("   Setup"),
+      (pane) => pane.includes(firstPrompt) && !pane.includes("Connections"),
       TIMEOUT,
     );
     await session.sendKeys("C-u");
@@ -3772,7 +3870,8 @@ tmuxTest(
     await session.waitForPane(
       (pane) =>
         pane.includes(secondPrompt) &&
-        pane.includes("ax login credential refresh failed.") &&
+        pane.includes("fx login credential refresh failed.") &&
+        pane.includes("Model provider"),
       TIMEOUT,
     );
     expect(gateway.requests).toHaveLength(0);
@@ -3889,7 +3988,7 @@ tmuxTest(
     await session.sendText("/credits");
     const failed = await session.waitForPane(
       (pane) =>
-        pane.includes("ax login credential refresh failed.") &&
+        pane.includes("fx login credential refresh failed.") &&
         pane.includes("Choose another source below") &&
         pane.includes("/credits"),
       TIMEOUT,
@@ -4043,4 +4142,79 @@ for (const scenario of [
     },
     60_000,
   );
+tmuxTest(
+  "login menu lists registered custom providers and presets for direct pickup",
+  async () => {
+    home = mkdtempSync(join(tmpdir(), "fx-tui-login-providers-"));
+    stderrPath = join(home, "stderr.log");
+    writeFileSync(stderrPath, "");
+    gateway = startFakeGateway([]);
+    oauth = startFakeOAuth(ACQUIRED_LOGIN_TOKEN, undefined, 3600, 1, {});
+    mkdirSync(join(home, ".fx"), { recursive: true });
+    writeFileSync(
+      join(home, ".fx", "providers.json"),
+      JSON.stringify({
+        providers: [
+          {
+            name: "ollama",
+            base_url: "http://localhost:11434/v1",
+            keyless: true,
+            models: [{ id: "llama3.2" }],
+          },
+        ],
+      }),
+    );
+
+    session = await startFx(home, stderrPath, gateway, oauth.issuerUrl);
+    await session.waitForComposer(TIMEOUT);
+    await session.resizeWindow(100, 48);
+
+    // The root menu is the setup hub; Model provider opens the provider
+    // stage, which lists the registered provider and presets after the
+    // built-in rows.
+    await session.sendText("/login");
+    await session.waitForText("Connections", TIMEOUT);
+    await session.sendKeys("Down");
+    await session.sendKeys("Enter");
+    const providerStage = await session.waitForPane(
+      (pane) => pane.includes("Model provider") && pane.includes("Ollama"),
+      TIMEOUT,
+    );
+    expect(providerStage).toContain("available");
+
+    // Selecting the registered keyless provider switches without a key entry.
+    await session.sendKeys("Down");
+    await session.sendKeys("Down");
+    await session.sendKeys("Down");
+    await session.sendKeys("Enter");
+    await session.waitForText("Switched to Ollama (custom provider)", TIMEOUT);
+
+    // Reopening the stage, a preset row (index 5: after the built-in rows,
+    // the registered provider, and the first preset opencode-go) registers
+    // the provider and opens the masked key entry.
+    await session.sendText("/login");
+    await session.waitForText("Connections", TIMEOUT);
+    await session.sendKeys("Down");
+    await session.sendKeys("Enter");
+    await session.waitForText("Ollama", TIMEOUT);
+    for (let i = 0; i < 5; i++) await session.sendKeys("Down");
+    await session.sendKeys("Enter");
+    await session.waitForText("Paste the OpenRouter API key", TIMEOUT);
+    const registered = JSON.parse(
+      readFileSync(join(home, ".fx", "providers.json"), "utf8"),
+    );
+    const openrouter = registered.providers.find(
+      (entry: { name: string }) => entry.name === "openrouter",
+    );
+    expect(openrouter).toBeDefined();
+    expect(openrouter.api_key_env).toBe("OPENROUTER_API_KEY");
+
+    await session.sendKeys("C-c");
+    await session.waitForComposer(TIMEOUT);
+    expect(session.isAlive()).toBe(true);
+    expect(readFileSync(stderrPath, "utf8")).toBe("");
+  },
+  60_000,
+);
+
 }

@@ -9,7 +9,7 @@ const mcp_contract = @import("mcp_contract.zig");
 const mcp_auth = @import("mcp_auth.zig");
 const mcp_auth_store = @import("mcp_auth_store.zig");
 const text_utils = @import("../shared/text_utils.zig");
-const gateway_schema = @import("../tooling/gateway_schema.zig");
+const model_tool_schema = @import("../tooling/model_tool_schema.zig");
 const permissions = @import("../permissions/permissions.zig");
 const tool_dispatch = @import("../tooling/tool_dispatch.zig");
 const tool_result_limits = @import("../tooling/tool_result_limits.zig");
@@ -5309,6 +5309,7 @@ pub const McpRuntime = struct {
             .issuer_mismatch => |mismatch| return .{ .issuer_mismatch = mismatch },
         };
         var transferred = false;
+        var repaired_entries: usize = 0;
         defer if (!transferred) credentials.deinit(self.alloc);
         {
             server.auth_lock.lockUncancelable(io_mod.getIo());
@@ -5318,7 +5319,12 @@ pub const McpRuntime = struct {
                 source.generation,
                 cancellation,
             );
-            try mcp_auth_store.save(self.alloc, server.config.name, credentials);
+            const save_result = try mcp_auth_store.save(
+                self.alloc,
+                server.config.name,
+                credentials,
+            );
+            repaired_entries = save_result.repaired_entries;
             installAuthCredentials(self.alloc, server, &credentials);
             transferred = true;
             if (server.pending_auth_challenge) |*pending| pending.deinit(self.alloc);
@@ -5340,7 +5346,9 @@ pub const McpRuntime = struct {
         server.connection_lock.unlockShared(io_mod.getIo());
         connection_locked = false;
         try resumeToolSubscriptionAfterAuthentication(self, server, deadline);
-        return .authenticated;
+        return .{ .authenticated = .{
+            .repaired_entries = repaired_entries,
+        } };
     }
 
     pub fn validateAuthenticationServer(self: *McpRuntime, name: []const u8) !void {
@@ -5370,6 +5378,7 @@ pub const McpRuntime = struct {
     pub const LogoutResult = struct {
         removed: bool = false,
         revocation_failed: bool = false,
+        repaired_entries: usize = 0,
     };
 
     const DetachedLogoutAuth = struct {
@@ -5461,7 +5470,10 @@ pub const McpRuntime = struct {
             self.restoreAuthAfterLogout(server, &auth);
             return err;
         };
-        if (deleted.removed == 0 and auth.credentials == null) {
+        if (deleted.removed == 0 and
+            deleted.repaired_entries == 0 and
+            auth.credentials == null)
+        {
             self.restoreAuthAfterLogout(server, &auth);
             return .{};
         }
@@ -5501,6 +5513,7 @@ pub const McpRuntime = struct {
         return .{
             .removed = true,
             .revocation_failed = revocation_failed,
+            .repaired_entries = deleted.repaired_entries,
         };
     }
 
@@ -9793,8 +9806,12 @@ fn connectServer(
         existing.deinit();
         server.env_map = null;
     }
+    defer {
+        if (server.env_map) |*environment| environment.deinit();
+        server.env_map = null;
+    }
     if (server.config.env.len > 0) {
-        server.env_map = EnvMap.init(alloc);
+        server.env_map = try io_mod.cloneEnvironMap(alloc);
         for (server.config.env) |entry| {
             try server.env_map.?.put(entry.key, entry.value);
         }
@@ -11264,7 +11281,7 @@ fn buildToolSchemaJsonWithLimitMarker(
     else
         try alloc.dupe(u8, encoded_description);
     defer alloc.free(merged_description);
-    return gateway_schema.dynamicFunctionSchemaJsonAlloc(
+    return model_tool_schema.dynamicFunctionSchemaJsonAlloc(
         alloc,
         tool.prefixed_name,
         merged_description,
@@ -11930,7 +11947,16 @@ fn refreshSharedCredentials(
     {
         return false;
     }
-    try mcp_auth_store.save(alloc, server.config.name, refreshed);
+    const save_result = try mcp_auth_store.save(
+        alloc,
+        server.config.name,
+        refreshed,
+    );
+    traceCredentialStoreRepair(
+        "refresh",
+        server.config.name,
+        save_result.repaired_entries,
+    );
     installAuthCredentials(alloc, server, &refreshed);
     transferred = true;
     return true;
@@ -12023,8 +12049,12 @@ fn authorizeForChallenge(
         .credentials => |credentials| credentials,
         .issuer_mismatch => |owned_mismatch| {
             var mismatch = owned_mismatch;
+            const err = switch (mismatch.source) {
+                .authorization_metadata => error.AuthorizationMetadataIssuerMismatch,
+                .authorization_response => error.AuthorizationResponseIssuerMismatch,
+            };
             mismatch.deinit();
-            return error.AuthorizationMetadataIssuerMismatch;
+            return err;
         },
     };
     var credentials_transferred = false;
@@ -12037,9 +12067,31 @@ fn authorizeForChallenge(
         credentials.deinit(alloc);
         return;
     }
-    try mcp_auth_store.save(alloc, server.config.name, credentials);
+    const save_result = try mcp_auth_store.save(
+        alloc,
+        server.config.name,
+        credentials,
+    );
+    traceCredentialStoreRepair(
+        "automated_auth",
+        server.config.name,
+        save_result.repaired_entries,
+    );
     installAuthCredentials(alloc, server, &credentials);
     credentials_transferred = true;
+}
+
+fn traceCredentialStoreRepair(
+    actor: []const u8,
+    server_name: []const u8,
+    repaired_entries: usize,
+) void {
+    if (repaired_entries == 0) return;
+    debug_trace.logf(
+        "mcp",
+        "removed unreadable MCP credential entries actor={s} server={s} count={d}",
+        .{ actor, server_name, repaired_entries },
+    );
 }
 
 fn installAuthCredentials(
@@ -18301,7 +18353,7 @@ test "MCP exact selection returns one executable schema by prefixed name" {
     try std.testing.expect(std.mem.find(u8, schema, "\"name\":\"mcp_fs_read\"") != null);
     try std.testing.expect(std.mem.find(u8, schema, "\"inputSchema\"") != null);
     try std.testing.expect(std.mem.find(u8, schema, "instruction tail") != null);
-    try std.testing.expect(std.mem.find(u8, schema, gateway_schema.truncation_marker) == null);
+    try std.testing.expect(std.mem.find(u8, schema, model_tool_schema.truncation_marker) == null);
     try std.testing.expect((try runtime.toolSchemaJsonByName(alloc, "mcp_missing", .{}, .{})) == null);
 }
 

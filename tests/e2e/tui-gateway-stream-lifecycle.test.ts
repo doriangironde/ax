@@ -161,7 +161,7 @@ function lengthLimitedCommandResponse(command: string) {
         type: "tool-call",
         toolCallId: "command_final",
         toolName: "terminal",
-        input: { action: "exec", command },
+        input: { action: "exec", timeout_ms: 600_000, command },
       })}\n\n` +
       'data: {"type":"finish","finishReason":{"unified":"length","raw":"length"}}\n\n' +
       "data: [DONE]\n\n",
@@ -2706,13 +2706,13 @@ describe.skipIf(!tmuxAvailable())("TUI gateway stream lifecycle", () => {
         fakeGatewaySerializedToolCall(
           "first_turn_command",
           "terminal",
-          '{"action":"exec","command":"printf preflight-failed > preflight.txt"}',
+          '{"action":"exec","command":"printf preflight-failed > preflight.txt","timeout_ms":600000}',
         ),
         () => heldGatewayResponse(hold),
         fakeGatewaySerializedToolCall(
           "queued_grep_command",
           "terminal",
-          '{"action":"exec","command":"grep -R \\"preflight\\" -n . | head"}',
+          '{"action":"exec","command":"grep -R \\"preflight\\" -n . | head","timeout_ms":600000}',
         ),
         duplicateKeyToolResponse(),
         fakeGatewayFinalText(finalText),
@@ -3671,7 +3671,7 @@ describe.skipIf(!tmuxAvailable())("TUI gateway stream lifecycle", () => {
         queuedGateway.requests[1]!.headers.get("ai-language-model-id"),
       ).toBe(nextModel);
       expect(JSON.parse(readFileSync(join(home, ".fx", "settings.json"), "utf8")))
-        .toMatchObject({ model: nextModel, effort: "auto" });
+        .toMatchObject({ models: { gateway: nextModel }, effort: "auto" });
       expect(readFileSync(stderrPath, "utf8")).toBe("");
       expect(session.isAlive()).toBe(true);
       expect(session.isPaneAlive()).toBe(true);
@@ -4379,7 +4379,7 @@ describe.skipIf(!tmuxAvailable())("TUI gateway stream lifecycle", () => {
               type: "tool-call",
               toolCallId: "queue_scrollback_command",
               toolName: "terminal",
-              input: { action: "exec", command: "sleep 30" },
+              input: { action: "exec", timeout_ms: 600_000, command: "sleep 30" },
             },
             {
               type: "finish",
@@ -5100,6 +5100,7 @@ describe.skipIf(!tmuxAvailable())("TUI gateway stream lifecycle", () => {
           "terminal",
           JSON.stringify({
             action: "exec",
+            timeout_ms: 600_000,
             command:
               "for i in $(seq -w 1 27); do printf 'docs/source-%s.md\\tWalter (1)\\n' \"$i\"; done",
           }),
@@ -5350,7 +5351,7 @@ describe.skipIf(!tmuxAvailable())("TUI gateway stream lifecycle", () => {
           }
           return new Response("unexpected Gateway request", { status: 500 });
         }, {
-          classifierDecision: "allow",
+          classifierDecision: "clear",
           models: [{ id: MODEL, type: "language", tags: ["tool-use"] }],
         });
         gateway = mcpGateway;
@@ -5650,7 +5651,7 @@ describe.skipIf(!tmuxAvailable())("TUI gateway stream lifecycle", () => {
             type: "tool-call",
             toolCallId: supportedCallId,
             toolName: "terminal",
-            input: { action: "exec", command: supportedCommand },
+            input: { action: "exec", timeout_ms: 600_000, command: supportedCommand },
           },
           {
             type: "finish",
@@ -5812,19 +5813,19 @@ describe.skipIf(!tmuxAvailable())("TUI gateway stream lifecycle", () => {
             type: "tool-call",
             toolCallId: "tool_summary_first",
             toolName: "terminal",
-            input: { action: "exec", command: firstCommand },
+            input: { action: "exec", timeout_ms: 600_000, command: firstCommand },
           },
           {
             type: "tool-call",
             toolCallId: "tool_summary_nested",
             toolName: "terminal",
-            input: { action: "exec", command: nestedCommand },
+            input: { action: "exec", timeout_ms: 600_000, command: nestedCommand },
           },
           {
             type: "tool-call",
             toolCallId: "tool_summary_third",
             toolName: "terminal",
-            input: { action: "exec", command: thirdCommand },
+            input: { action: "exec", timeout_ms: 600_000, command: thirdCommand },
           },
           {
             type: "finish",
@@ -6009,7 +6010,7 @@ describe.skipIf(!tmuxAvailable())("TUI gateway stream lifecycle", () => {
             type: "tool-call",
             toolCallId: "minimal_command_one",
             toolName: "terminal",
-            input: { action: "exec", command: firstCommand },
+            input: { action: "exec", timeout_ms: 600_000, command: firstCommand },
           },
           {
             type: "finish",
@@ -6039,7 +6040,7 @@ describe.skipIf(!tmuxAvailable())("TUI gateway stream lifecycle", () => {
             type: "tool-call",
             toolCallId: "minimal_command_two",
             toolName: "terminal",
-            input: { action: "exec", command: secondCommand },
+            input: { action: "exec", timeout_ms: 600_000, command: secondCommand },
           },
           {
             type: "finish",
@@ -6058,7 +6059,7 @@ describe.skipIf(!tmuxAvailable())("TUI gateway stream lifecycle", () => {
             type: "tool-call",
             toolCallId: "minimal_command_live",
             toolName: "terminal",
-            input: { action: "exec", command: liveCommand },
+            input: { action: "exec", timeout_ms: 600_000, command: liveCommand },
           },
           {
             type: "finish",
@@ -6182,6 +6183,7 @@ describe.skipIf(!tmuxAvailable())("TUI gateway stream lifecycle", () => {
       const cancelledGateway = startFakeGateway([
         fakeGatewayToolCall("minimal_cancelled_command", "terminal", {
           action: "exec",
+          timeout_ms: 600_000,
           command: "sleep 30",
         }),
       ]);
@@ -6476,7 +6478,7 @@ describe.skipIf(!tmuxAvailable())("TUI gateway stream lifecycle", () => {
 
       expect(queuedGateway.requests).toHaveLength(2);
       expect(pane).toContain("● 1 tool call · 1 read · 1 failed");
-      expect(pane).toContain("└ Connection interrupted before read_file ran");
+      expect(pane).toContain("└ Connection interrupted before tool call ran");
       expect(pane).not.toContain("● Reading");
     },
     TIMEOUT,
@@ -6515,7 +6517,7 @@ describe.skipIf(!tmuxAvailable())("TUI gateway stream lifecycle", () => {
             type: "tool-call",
             toolCallId: "command_1",
             toolName: "terminal",
-            input: { action: "exec", command: "seq 1 1" },
+            input: { action: "exec", timeout_ms: 600_000, command: "seq 1 1" },
           },
           {
             type: "finish",
@@ -6557,7 +6559,7 @@ describe.skipIf(!tmuxAvailable())("TUI gateway stream lifecycle", () => {
       expect(reviewing).toMatch(/Thinking \(\d+s\)/);
       expect(reviewing).not.toContain(finalText);
 
-      releaseClassifier(fakeGatewayPermissionDecision("allow"));
+      releaseClassifier(fakeGatewayPermissionDecision("clear"));
       await session.waitForPane(
         (pane) => pane.includes(finalText) && !pane.includes("Thinking"),
         TIMEOUT,
@@ -6807,7 +6809,7 @@ describe.skipIf(!tmuxAvailable())("TUI gateway stream lifecycle", () => {
       writeFileSync(stderrPath, "");
 
       const commandGateway = startFakeGateway([
-        fakeGatewayToolCall("multiline_command", "terminal", { action: "exec", command }),
+        fakeGatewayToolCall("multiline_command", "terminal", { action: "exec", timeout_ms: 600_000, command }),
         fakeGatewayFinalText(finalText),
       ]);
       gateway = commandGateway;
@@ -6930,27 +6932,27 @@ describe.skipIf(!tmuxAvailable())("TUI gateway stream lifecycle", () => {
           {
             type: "tool-input-delta",
             id: "stream_cmd_one",
-            delta: JSON.stringify({ action: "exec", command: firstCommand }),
+            delta: JSON.stringify({ action: "exec", timeout_ms: 600_000, command: firstCommand }),
           },
           { type: "tool-input-end", id: "stream_cmd_one" },
           { type: "tool-input-start", id: "stream_cmd_two", toolName: "terminal" },
           {
             type: "tool-input-delta",
             id: "stream_cmd_two",
-            delta: JSON.stringify({ action: "exec", command: secondCommand }),
+            delta: JSON.stringify({ action: "exec", timeout_ms: 600_000, command: secondCommand }),
           },
           { type: "tool-input-end", id: "stream_cmd_two" },
           {
             type: "tool-call",
             toolCallId: "stream_cmd_one",
             toolName: "terminal",
-            input: { action: "exec", command: firstCommand },
+            input: { action: "exec", timeout_ms: 600_000, command: firstCommand },
           },
           {
             type: "tool-call",
             toolCallId: "stream_cmd_two",
             toolName: "terminal",
-            input: { action: "exec", command: secondCommand },
+            input: { action: "exec", timeout_ms: 600_000, command: secondCommand },
           },
           {
             type: "finish",
@@ -7539,6 +7541,7 @@ describe.skipIf(!tmuxAvailable())("transcript scrollback release", () => {
               input: {
                 action: "exec",
                 command: "sleep 5; printf HELD_COMMAND_DONE",
+                timeout_ms: 600_000,
               },
             },
           ],

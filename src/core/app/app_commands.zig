@@ -140,11 +140,22 @@ fn formatMcpIssuerMismatch(
     errdefer out.deinit();
     try out.writer.print("MCP authentication for '{s}' was rejected: expected issuer ", .{server_name});
     try std.json.Stringify.value(expected.bytes, .{}, &out.writer);
-    try out.writer.writeAll(" but metadata returned ");
-    try std.json.Stringify.value(returned.bytes, .{}, &out.writer);
-    try out.writer.writeAll(". Add \"oauth\":{\"issuer\":");
-    try std.json.Stringify.value(returned.bytes, .{}, &out.writer);
-    try out.writer.writeAll("} to this server's entry in ~/.fx/mcp.json and retry.");
+    switch (mismatch.source) {
+        .authorization_metadata => {
+            try out.writer.writeAll(" but metadata returned ");
+            try std.json.Stringify.value(returned.bytes, .{}, &out.writer);
+            try out.writer.writeAll(". Add \"oauth\":{\"issuer\":");
+            try std.json.Stringify.value(returned.bytes, .{}, &out.writer);
+            try out.writer.writeAll("} to this server's entry in ~/.fx/mcp.json and retry.");
+        },
+        .authorization_response => {
+            try out.writer.writeAll(" but the authorization response returned issuer ");
+            try std.json.Stringify.value(returned.bytes, .{}, &out.writer);
+            try out.writer.writeAll(
+                ". fx stopped before token exchange. Contact the MCP server provider; changing oauth.issuer is not a safe workaround.",
+            );
+        },
+    }
     return out.toOwnedSlice();
 }
 
@@ -452,12 +463,23 @@ pub fn Handlers(comptime App: type) type {
 
             if (completion.result) |authentication| {
                 switch (authentication) {
-                    .authenticated => {
-                        const success = try std.fmt.allocPrint(
-                            app.alloc,
-                            "Authenticated MCP server '{s}'.",
-                            .{completion.server_name},
-                        );
+                    .authenticated => |authenticated| {
+                        const success = if (authenticated.repaired_entries == 0)
+                            try std.fmt.allocPrint(
+                                app.alloc,
+                                "Authenticated MCP server '{s}'.",
+                                .{completion.server_name},
+                            )
+                        else
+                            try std.fmt.allocPrint(
+                                app.alloc,
+                                "Authenticated MCP server '{s}'.\nRemoved {d} unreadable MCP credential {s}.",
+                                .{
+                                    completion.server_name,
+                                    authenticated.repaired_entries,
+                                    if (authenticated.repaired_entries == 1) "entry" else "entries",
+                                },
+                            );
                         defer app.alloc.free(success);
                         app.beginMcpReload() catch |err| {
                             const body = try std.fmt.allocPrint(
@@ -1433,6 +1455,7 @@ pub fn Handlers(comptime App: type) type {
             return .{
                 .removed = result.removed,
                 .revocation_failed = result.revocation_failed,
+                .repaired_entries = result.repaired_entries,
             };
         }
 
@@ -3494,7 +3517,7 @@ const McpCommandFakeApp = struct {
         self.authentication_pending = false;
         return .{
             .server_name = try self.alloc.dupe(u8, "fixture"),
-            .result = .authenticated,
+            .result = .{ .authenticated = .{} },
         };
     }
 

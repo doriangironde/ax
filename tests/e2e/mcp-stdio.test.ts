@@ -47,6 +47,7 @@ type FixtureRoot = {
   launchLogPath: string;
   traceLogPath: string;
   invalidationReleasePath: string;
+  environmentCapturePath: string;
 };
 
 type WireEntry = {
@@ -125,6 +126,7 @@ type RootOptions = {
   required?: boolean;
   resourcesSubscribe?: boolean;
   resourceTtlMs?: number;
+  captureEnvironment?: boolean;
 };
 
 function createRoot(
@@ -132,13 +134,14 @@ function createRoot(
   scriptPath: string,
   options: RootOptions = {},
 ): FixtureRoot {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), `ax-mcp-${label}-`)));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), `fx-mcp-${label}-`)));
   cleanupRoot = root;
   const home = join(root, "home");
   const workspace = join(root, "workspace");
   const wireLogPath = join(root, "mcp-wire.jsonl");
   const launchLogPath = join(root, "mcp-launches.txt");
   const invalidationReleasePath = join(root, "mcp-invalidation-release");
+  const environmentCapturePath = join(root, "mcp-environment.json");
   const command = options.recordLaunchAttempts
     ? [
       "/bin/sh",
@@ -195,6 +198,12 @@ function createRoot(
               options.legacyRejectNewerInitialize ? "1" : undefined,
             FX_MCP_DRAFT7_PATTERN: options.draft7Pattern,
             FX_MCP_URL_REQUIRED_OPERATION: options.urlRequiredOperation,
+            FX_MCP_ENV_CAPTURE: options.captureEnvironment
+              ? environmentCapturePath
+              : undefined,
+            FX_MCP_ENV_SENTINEL: options.captureEnvironment
+              ? "configured"
+              : undefined,
           },
           startup_timeout_ms: options.startupTimeoutMs,
           operation_timeout_ms: options.operationTimeoutMs,
@@ -211,6 +220,7 @@ function createRoot(
     launchLogPath,
     traceLogPath: join(root, "fx-trace.log"),
     invalidationReleasePath,
+    environmentCapturePath,
   };
 }
 
@@ -292,8 +302,8 @@ function preserveStdioFailure(
 ): void {
   if (result.code === 0) return;
   cleanupRoot = null;
-  writeFileSync(join(root.root, "ax-stdout.log"), result.stdout);
-  writeFileSync(join(root.root, "ax-stderr.log"), result.stderr);
+  writeFileSync(join(root.root, "fx-stdout.log"), result.stdout);
+  writeFileSync(join(root.root, "fx-stderr.log"), result.stderr);
   writeFileSync(
     join(root.root, "failure.json"),
     JSON.stringify({
@@ -303,7 +313,7 @@ function preserveStdioFailure(
       gatewayRequests: activeGateway.requests.map((request) => request.body),
     }, null, 2),
   );
-  throw new Error(`ax ${label} failed; retained artifacts: ${root.root}`);
+  throw new Error(`fx ${label} failed; retained artifacts: ${root.root}`);
 }
 
 function isProcessAlive(pid: number): boolean {
@@ -370,7 +380,7 @@ describe("modern MCP stdio compatibility", () => {
       expect(approval).toContain("Allow this MCP tool call?");
       expect(approval).toContain(TOOL_NAME);
       expect(approval).toContain(
-        "This MCP tool needs approval before ax can send the request.",
+        "This MCP tool needs approval before fx can send the request.",
       );
       expect(approval).toContain("3. Deny");
       expect(
@@ -396,7 +406,7 @@ describe("modern MCP stdio compatibility", () => {
   );
 
   test("repository-local MCP configuration never launches a process or network request", async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-mcp-project-trust-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-mcp-project-trust-")));
     cleanupRoot = root;
     const home = join(root, "home");
     const workspace = join(root, "workspace");
@@ -598,7 +608,7 @@ describe("modern MCP stdio compatibility", () => {
       }
       return fakeGatewayFinalText("unexpected scoped MCP child request");
     }, {
-      classifierDecision: "allow",
+      classifierDecision: "clear",
       models: [{ id: MODEL, type: "language", tags: ["tool-use"] }],
     });
     gateway = activeGateway;
@@ -667,7 +677,7 @@ describe("modern MCP stdio compatibility", () => {
         }
         return fakeGatewayFinalText("unexpected feature-only child request");
       }, {
-        classifierDecision: "allow",
+        classifierDecision: "clear",
         models: [{ id: MODEL, type: "language", tags: ["tool-use"] }],
       });
       gateway = activeGateway;
@@ -765,7 +775,7 @@ describe("modern MCP stdio compatibility", () => {
         }
         return fakeGatewayFinalText("unexpected disabled MCP child request");
       }, {
-        classifierDecision: "allow",
+        classifierDecision: "clear",
         models: [{ id: MODEL, type: "language", tags: ["tool-use"] }],
       });
       gateway = activeGateway;
@@ -873,7 +883,7 @@ describe("modern MCP stdio compatibility", () => {
         }
         return fakeGatewayFinalText("unexpected scoped refresh request");
       }, {
-        classifierDecision: "allow",
+        classifierDecision: "clear",
         models: [{ id: MODEL, type: "language", tags: ["tool-use"] }],
       });
       gateway = activeGateway;
@@ -975,7 +985,7 @@ describe("modern MCP stdio compatibility", () => {
     await expectFixtureProcessesExited(wire);
   }, 30_000);
 
-  test("ax ask uses typed Resources Prompts and Completion flows", async () => {
+  test("fx ask uses typed Resources Prompts and Completion flows", async () => {
     const root = createRoot("ask-features", MODERN_FIXTURE, {
       mode: "features",
     });
@@ -1116,7 +1126,7 @@ describe("modern MCP stdio compatibility", () => {
     await expectFixtureProcessesExited(wire);
   }, 30_000);
 
-  test("ax ask cancels a bounded stalled resource read", async () => {
+  test("fx ask cancels a bounded stalled resource read", async () => {
     const root = createRoot("ask-feature-cancel", MODERN_FIXTURE, {
       mode: "features",
       operationTimeoutMs: 200,
@@ -1543,7 +1553,7 @@ describe("modern MCP stdio compatibility", () => {
   }, 15_000);
 
   test("a blocked write recovers before the next unsent runtime call", async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-mcp-runtime-recovery-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-mcp-runtime-recovery-")));
     cleanupRoot = root;
     const proc = Bun.spawn(
       [
@@ -1590,7 +1600,7 @@ describe("modern MCP stdio compatibility", () => {
   test("catalog waits preserve operation timeout and cancellation", async () => {
     for (const control of ["timeout", "cancel"] as const) {
       const root = realpathSync(
-        mkdtempSync(join(tmpdir(), `ax-mcp-catalog-${control}-`)),
+        mkdtempSync(join(tmpdir(), `fx-mcp-catalog-${control}-`)),
       );
       cleanupRoot = root;
       const proc = Bun.spawn(
@@ -1638,7 +1648,7 @@ describe("modern MCP stdio compatibility", () => {
   test("stalled recovery preserves startup timeout and local cancellation", async () => {
     for (const control of ["timeout", "cancel"] as const) {
       const root = realpathSync(
-        mkdtempSync(join(tmpdir(), `ax-mcp-recovery-${control}-`)),
+        mkdtempSync(join(tmpdir(), `fx-mcp-recovery-${control}-`)),
       );
       cleanupRoot = root;
       const proc = Bun.spawn(
@@ -1683,7 +1693,7 @@ describe("modern MCP stdio compatibility", () => {
   }, 30_000);
 
   test("concurrent server recovery preserves whole-runtime tool-name uniqueness", async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-mcp-recovery-collision-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-mcp-recovery-collision-")));
     cleanupRoot = root;
     const proc = Bun.spawn(
       [
@@ -1729,7 +1739,7 @@ describe("modern MCP stdio compatibility", () => {
   }, 30_000);
 
   test("a failed reconnect leaves the remaining restart budget reachable", async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-mcp-recovery-budget-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-mcp-recovery-budget-")));
     cleanupRoot = root;
     const proc = Bun.spawn(
       [
@@ -1772,7 +1782,7 @@ describe("modern MCP stdio compatibility", () => {
   }, 30_000);
 
   test("a queued stale tool cannot cross a recovered connection generation", async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-mcp-stale-recovery-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-mcp-stale-recovery-")));
     cleanupRoot = root;
     const proc = Bun.spawn(
       [
@@ -1846,7 +1856,7 @@ describe("modern MCP stdio compatibility", () => {
       },
     ] as const
   ) {
-    test(`ax ask calls the ${fixture.label} stdio fixture`, async () => {
+    test(`fx ask calls the ${fixture.label} stdio fixture`, async () => {
       const root = createRoot(`ask-${fixture.label}`, fixture.path, {
         recordLaunchAttempts: true,
       });
@@ -1892,7 +1902,50 @@ describe("modern MCP stdio compatibility", () => {
     });
   }
 
-  test("ax ask does not start an unused optional MCP server", async () => {
+  test("configured MCP stdio environment overlays inherited process values", async () => {
+    const root = createRoot("ask-environment-overlay", MODERN_FIXTURE, {
+      captureEnvironment: true,
+    });
+    const activeGateway = startToolGateway("Environment overlay complete.");
+    gateway = activeGateway;
+    const inheritedSentinel = "inherited-parent-value";
+    const proxySentinel = "http://proxy.example.test:8080";
+    const parentPath = process.env.PATH ?? "/usr/bin:/bin";
+
+    const result = await runFx(
+      ["ask", "--json", "--auto", "--no-save", "Call the environment MCP fixture."],
+      {
+        cwd: root.workspace,
+        env: {
+          ...fixtureEnv(root, activeGateway),
+          PATH: parentPath,
+          FX_MCP_INHERITED_SENTINEL: inheritedSentinel,
+          HTTPS_PROXY: proxySentinel,
+        },
+        timeoutMs: 20_000,
+      },
+    );
+
+    expect(result.code, result.stderr || result.stdout).toBe(0);
+    expect(JSON.parse(result.stdout).output).toContain("Environment overlay complete.");
+    const captured = JSON.parse(readFileSync(root.environmentCapturePath, "utf8")) as {
+      configured?: string;
+      inherited?: string;
+      path?: string;
+      home?: string;
+      httpsProxy?: string;
+    };
+    expect(captured).toEqual({
+      configured: "configured",
+      inherited: inheritedSentinel,
+      path: parentPath,
+      home: root.home,
+      httpsProxy: proxySentinel,
+    });
+    await expectFixtureProcessesExited(readWire(root.wireLogPath));
+  }, 30_000);
+
+  test("fx ask does not start an unused optional MCP server", async () => {
     const root = createRoot("ask-unused-optional", MODERN_FIXTURE, {
       recordLaunchAttempts: true,
     });
@@ -1919,7 +1972,7 @@ describe("modern MCP stdio compatibility", () => {
     expect(existsSync(root.wireLogPath)).toBe(false);
   }, 15_000);
 
-  test("ax ask accepts the official legacy SDK Draft 7 tool schema", async () => {
+  test("fx ask accepts the official legacy SDK Draft 7 tool schema", async () => {
     const root = createRoot("ask-legacy-draft7", LEGACY_FIXTURE, {
       mode: "draft7_schema",
     });
@@ -1950,7 +2003,7 @@ describe("modern MCP stdio compatibility", () => {
     await expectFixtureProcessesExited(wire);
   });
 
-  test("ax ask rejects invalid legacy Draft 7 arguments before transport", async () => {
+  test("fx ask rejects invalid legacy Draft 7 arguments before transport", async () => {
     const root = createRoot("ask-legacy-draft7-invalid", LEGACY_FIXTURE, {
       mode: "draft7_schema",
       draft7Pattern: "^\\S+$",
@@ -1981,7 +2034,7 @@ describe("modern MCP stdio compatibility", () => {
     await expectFixtureProcessesExited(wire);
   });
 
-  test("ax ask routes legacy stdio progress", async () => {
+  test("fx ask routes legacy stdio progress", async () => {
     const root = createRoot("ask-legacy-progress", LEGACY_FIXTURE, {
       mode: "progress",
     });
@@ -2006,7 +2059,7 @@ describe("modern MCP stdio compatibility", () => {
     await expectFixtureProcessesExited(wire);
   }, 30_000);
 
-  test("noninteractive ax ask returns typed input-required without fabricating a continuation", async () => {
+  test("noninteractive fx ask returns typed input-required without fabricating a continuation", async () => {
     const root = createRoot("ask-mrtr", MODERN_FIXTURE, {
       mode: "mrtr_input_required",
     });
@@ -2290,7 +2343,7 @@ describe("modern MCP stdio compatibility", () => {
         const activeGateway = startToolGateway(`${surface} terminal-safe elicitation complete.`);
         gateway = activeGateway;
         const stderrPath = join(root.root, "stderr.log");
-        const binary = join(REPO_ROOT, "zig-out", "bin", "ax");
+        const binary = join(REPO_ROOT, "zig-out", "bin", "fx");
         tui = await TmuxSession.create({
           isolated: true,
           ...(surface === "Ask"
@@ -2367,7 +2420,7 @@ describe("modern MCP stdio compatibility", () => {
         const activeGateway = startToolGateway(`${surface} collision form complete.`);
         gateway = activeGateway;
         const stderrPath = join(root.root, "stderr.log");
-        const binary = join(REPO_ROOT, "zig-out", "bin", "ax");
+        const binary = join(REPO_ROOT, "zig-out", "bin", "fx");
         tui = await TmuxSession.create({
           isolated: true,
           ...(surface === "Ask"
@@ -2647,7 +2700,7 @@ describe("modern MCP stdio compatibility", () => {
   }, 30_000);
 
   test.skipIf(!tmuxAvailable())(
-    "interactive ax ask validates and submits a modern MCP form elicitation",
+    "interactive fx ask validates and submits a modern MCP form elicitation",
     async () => {
       const root = createRoot("ask-interactive-mrtr", MODERN_FIXTURE, {
         mode: "mrtr_input_required",
@@ -2655,7 +2708,7 @@ describe("modern MCP stdio compatibility", () => {
       });
       const activeGateway = startToolGateway("Interactive Ask elicitation complete.");
       gateway = activeGateway;
-      const binary = join(REPO_ROOT, "zig-out", "bin", "ax");
+      const binary = join(REPO_ROOT, "zig-out", "bin", "fx");
       const prompt = "Call the MRTR MCP fixture interactively.";
       tui = await TmuxSession.create({
         isolated: true,
@@ -2700,7 +2753,7 @@ describe("modern MCP stdio compatibility", () => {
 
   for (const legacyVersion of ["2025-06-18", "2025-11-25"] as const) {
     test.skipIf(!tmuxAvailable())(
-      `interactive ax ask handles negotiated ${legacyVersion} direct elicitation/create`,
+      `interactive fx ask handles negotiated ${legacyVersion} direct elicitation/create`,
       async () => {
         const root = createRoot(`ask-legacy-direct-${legacyVersion}`, LEGACY_FIXTURE, {
           mode: "direct_form",
@@ -2710,7 +2763,7 @@ describe("modern MCP stdio compatibility", () => {
         });
         const activeGateway = startToolGateway(`Legacy ${legacyVersion} elicitation complete.`);
         gateway = activeGateway;
-        const binary = join(REPO_ROOT, "zig-out", "bin", "ax");
+        const binary = join(REPO_ROOT, "zig-out", "bin", "fx");
         tui = await TmuxSession.create({
           isolated: true,
           cmd: `${JSON.stringify(binary)} ask --auto --no-save ${JSON.stringify("Call the direct legacy elicitation fixture.")}`,
@@ -2781,7 +2834,7 @@ describe("modern MCP stdio compatibility", () => {
       );
       const activeGateway = startToolGateway("Legacy URL-required complete.");
       gateway = activeGateway;
-      const binary = join(REPO_ROOT, "zig-out", "bin", "ax");
+      const binary = join(REPO_ROOT, "zig-out", "bin", "fx");
       try {
         tui = await TmuxSession.create({
           isolated: true,
@@ -2844,7 +2897,7 @@ describe("modern MCP stdio compatibility", () => {
       );
       const activeGateway = startToolGateway("Legacy multiple URL completion complete.");
       gateway = activeGateway;
-      const binary = join(REPO_ROOT, "zig-out", "bin", "ax");
+      const binary = join(REPO_ROOT, "zig-out", "bin", "fx");
       tui = await TmuxSession.create({
         isolated: true,
         cmd: `${JSON.stringify(binary)} ask --auto --no-save ${JSON.stringify("Call the multiple legacy URL fixture.")}`,
@@ -2913,7 +2966,7 @@ describe("modern MCP stdio compatibility", () => {
       );
       const activeGateway = startToolGateway("Legacy malformed completion complete.");
       gateway = activeGateway;
-      const binary = join(REPO_ROOT, "zig-out", "bin", "ax");
+      const binary = join(REPO_ROOT, "zig-out", "bin", "fx");
       tui = await TmuxSession.create({
         isolated: true,
         cmd: `${JSON.stringify(binary)} ask --auto --no-save ${JSON.stringify("Call the malformed completion fixture.")}`,
@@ -2966,7 +3019,7 @@ describe("modern MCP stdio compatibility", () => {
       });
       const activeGateway = startToolGateway("must not complete");
       gateway = activeGateway;
-      const binary = join(REPO_ROOT, "zig-out", "bin", "ax");
+      const binary = join(REPO_ROOT, "zig-out", "bin", "fx");
       const fakeBin = join(root.root, "fake-bin");
       mkdirSync(fakeBin);
       writeFakeUrlOpeners(fakeBin, "#!/bin/sh\nexit 0\n");
@@ -3008,7 +3061,7 @@ describe("modern MCP stdio compatibility", () => {
       });
       const activeGateway = startToolGateway("Legacy URL timeout handled.");
       gateway = activeGateway;
-      const binary = join(REPO_ROOT, "zig-out", "bin", "ax");
+      const binary = join(REPO_ROOT, "zig-out", "bin", "fx");
       const fakeBin = join(root.root, "fake-bin");
       mkdirSync(fakeBin);
       writeFakeUrlOpeners(fakeBin, "#!/bin/sh\nexit 0\n");
@@ -3086,7 +3139,7 @@ describe("modern MCP stdio compatibility", () => {
         ], {
           models: [{ id: MODEL, type: "language", tags: ["tool-use"] }],
         });
-        const binary = join(REPO_ROOT, "zig-out", "bin", "ax");
+        const binary = join(REPO_ROOT, "zig-out", "bin", "fx");
         tui = await TmuxSession.create({
           isolated: true,
           cmd: `${JSON.stringify(binary)} ask --auto --no-save ${JSON.stringify(`Use the legacy ${operation} URL-required fixture.`)}`,
@@ -3128,7 +3181,7 @@ describe("modern MCP stdio compatibility", () => {
   }
 
   test.skipIf(!tmuxAvailable())(
-    "interactive ax ask validates Unicode patterns, edits, and submits every form field kind",
+    "interactive fx ask validates Unicode patterns, edits, and submits every form field kind",
     async () => {
       const root = createRoot("ask-interactive-full-form", MODERN_FIXTURE, {
         mode: "mrtr_full_form",
@@ -3136,7 +3189,7 @@ describe("modern MCP stdio compatibility", () => {
       });
       const activeGateway = startToolGateway("Interactive Ask full form complete.");
       gateway = activeGateway;
-      const binary = join(REPO_ROOT, "zig-out", "bin", "ax");
+      const binary = join(REPO_ROOT, "zig-out", "bin", "fx");
       tui = await TmuxSession.create({
         isolated: true,
         cmd: `${JSON.stringify(binary)} ask --auto --no-save ${JSON.stringify("Complete the full MCP form.")}`,
@@ -3242,7 +3295,7 @@ describe("modern MCP stdio compatibility", () => {
   );
 
   test.skipIf(!tmuxAvailable())(
-    "interactive ax ask retries a URL browser failure without prefetching",
+    "interactive fx ask retries a URL browser failure without prefetching",
     async () => {
       let targetRequests = 0;
       const target = Bun.serve({
@@ -3269,7 +3322,7 @@ describe("modern MCP stdio compatibility", () => {
       );
       const activeGateway = startToolGateway("Interactive Ask URL elicitation complete.");
       gateway = activeGateway;
-      const binary = join(REPO_ROOT, "zig-out", "bin", "ax");
+      const binary = join(REPO_ROOT, "zig-out", "bin", "fx");
       try {
         tui = await TmuxSession.create({
           isolated: true,
@@ -3325,7 +3378,7 @@ describe("modern MCP stdio compatibility", () => {
   );
 
   test.skipIf(!tmuxAvailable())(
-    "interactive ax ask can refuse a URL without launching a browser",
+    "interactive fx ask can refuse a URL without launching a browser",
     async () => {
       let targetRequests = 0;
       const target = Bun.serve({
@@ -3350,7 +3403,7 @@ describe("modern MCP stdio compatibility", () => {
       );
       const activeGateway = startToolGateway("Interactive Ask URL refusal complete.");
       gateway = activeGateway;
-      const binary = join(REPO_ROOT, "zig-out", "bin", "ax");
+      const binary = join(REPO_ROOT, "zig-out", "bin", "fx");
       try {
         tui = await TmuxSession.create({
           isolated: true,
@@ -3390,7 +3443,7 @@ describe("modern MCP stdio compatibility", () => {
     35_000,
   );
 
-  test("ax ask routes progress and times out a stalled operation without leaking its child", async () => {
+  test("fx ask routes progress and times out a stalled operation without leaking its child", async () => {
     const progressRoot = createRoot("ask-progress", MODERN_FIXTURE, {
       mode: "progress",
     });
@@ -3445,7 +3498,7 @@ describe("modern MCP stdio compatibility", () => {
     await expectFixtureProcessesExited(timeoutWire);
   }, 45_000);
 
-  test("ax ask bounds startup timeouts and reaps every attempted child", async () => {
+  test("fx ask bounds startup timeouts and reaps every attempted child", async () => {
     const root = createRoot("ask-startup-timeout", MODERN_FIXTURE, {
       mode: "stall_startup",
       startupTimeoutMs: 50,
@@ -3534,7 +3587,7 @@ describe("modern MCP stdio compatibility", () => {
     25_000,
   );
 
-  test("required profile startup failure blocks ax ask before any Gateway request", async () => {
+  test("required profile startup failure blocks fx ask before any Gateway request", async () => {
     const root = createRoot("ask-required-startup-timeout", MODERN_FIXTURE, {
       mode: "stall_startup",
       startupTimeoutMs: 50,
@@ -4309,7 +4362,7 @@ describe("modern MCP stdio compatibility", () => {
           },
         });
       }, {
-        classifierDecision: "allow",
+        classifierDecision: "clear",
         models: [{ id: MODEL, type: "language", tags: ["tool-use"] }],
       });
       gateway = activeGateway;
@@ -4417,7 +4470,7 @@ describe("modern MCP stdio compatibility", () => {
     45_000,
   );
 
-  test("ax ask performs one fresh-discovery restart without replaying the failed call", async () => {
+  test("fx ask performs one fresh-discovery restart without replaying the failed call", async () => {
     const root = createRoot("ask-restart", MODERN_FIXTURE, {
       mode: "crash_once",
       restartLimit: 1,
@@ -4462,7 +4515,7 @@ describe("modern MCP stdio compatibility", () => {
 
   for (const childMode of ["one_off", "persistent"] as const) {
     test(`revoked ${childMode} authority prevents stdio recovery effects`, async () => {
-      const root = realpathSync(mkdtempSync(join(tmpdir(), `ax-mcp-${childMode}-recovery-`)));
+      const root = realpathSync(mkdtempSync(join(tmpdir(), `fx-mcp-${childMode}-recovery-`)));
       cleanupRoot = root;
       const proc = Bun.spawn(
         [
@@ -4536,7 +4589,7 @@ describe("modern MCP stdio compatibility", () => {
     }, 30_000);
   }
 
-  test("ax ask stops restarting after the configured stdio budget", async () => {
+  test("fx ask stops restarting after the configured stdio budget", async () => {
     const root = createRoot("ask-restart-limit", MODERN_FIXTURE, {
       mode: "crash_always",
       restartLimit: 1,

@@ -1117,17 +1117,20 @@ fn configuredProviderSelection(
     settings: *const config_runtime.Settings,
 ) !model_provider.ProviderSelection {
     const provider = settings.provider orelse .gateway;
-    const result: model_provider.ProviderSelection = switch (provider) {
-        .gateway => .{ .provider = provider, .model = settings.model orelse default_model },
-        .codex => .{ .provider = provider, .model = settings.codex_model orelse return error.CodexModelNotSelected },
-        .grok => .{ .provider = provider, .model = settings.grok_model orelse return error.GrokModelNotSelected },
-        .custom => .{
-            .provider = provider,
-            .model = settings.model orelse return error.CustomProviderModelNotSelected,
-            .custom_provider = settings.custom_provider orelse return error.CustomProviderNameNotSelected,
-        },
+    const model = settings.models.get(provider) orelse switch (provider) {
+        .gateway => default_model,
+        .codex => return error.CodexModelNotSelected,
+        .grok => return error.GrokModelNotSelected,
+        .custom => return error.CustomProviderModelNotSelected,
     };
-    return result;
+    return .{
+        .provider = provider,
+        .model = model,
+        .custom_provider = if (provider == .custom)
+            settings.custom_provider orelse return error.CustomProviderNameNotSelected
+        else
+            null,
+    };
 }
 
 fn initialModelId(default_model: []const u8, configured: ?[]const u8) []const u8 {
@@ -1137,20 +1140,16 @@ fn initialModelId(default_model: []const u8, configured: ?[]const u8) []const u8
 }
 
 test "startup provider chooses only its provider-scoped model" {
-    const gateway_settings = config_runtime.Settings{
-        .model = @constCast("gateway/model"),
-        .provider = .gateway,
-        .codex_model = @constCast("gpt-model"),
-    };
+    var gateway_settings = config_runtime.Settings{ .provider = .gateway };
+    gateway_settings.models.values[@intFromEnum(model_provider.ProviderId.gateway)] = @constCast("gateway/model");
+    gateway_settings.models.values[@intFromEnum(model_provider.ProviderId.codex)] = @constCast("gpt-model");
     const gateway = try configuredProviderSelection("default/model", &gateway_settings);
     try std.testing.expectEqual(model_provider.ProviderId.gateway, gateway.provider);
     try std.testing.expectEqualStrings("gateway/model", gateway.model);
 
-    const codex_settings = config_runtime.Settings{
-        .model = @constCast("gateway/model"),
-        .provider = .codex,
-        .codex_model = @constCast("gpt-model"),
-    };
+    var codex_settings = config_runtime.Settings{ .provider = .codex };
+    codex_settings.models.values[@intFromEnum(model_provider.ProviderId.gateway)] = @constCast("gateway/model");
+    codex_settings.models.values[@intFromEnum(model_provider.ProviderId.codex)] = @constCast("gpt-model");
     const codex = try configuredProviderSelection("default/model", &codex_settings);
     try std.testing.expectEqual(model_provider.ProviderId.codex, codex.provider);
     try std.testing.expectEqualStrings("gpt-model", codex.model);
@@ -1161,10 +1160,8 @@ test "startup provider chooses only its provider-scoped model" {
         configuredProviderSelection("default/model", &missing_codex),
     );
 
-    const grok_settings = config_runtime.Settings{
-        .provider = .grok,
-        .grok_model = @constCast("grok-model"),
-    };
+    var grok_settings = config_runtime.Settings{ .provider = .grok };
+    grok_settings.models.values[@intFromEnum(model_provider.ProviderId.grok)] = @constCast("grok-model");
     const grok = try configuredProviderSelection("default/model", &grok_settings);
     try std.testing.expectEqual(model_provider.ProviderId.grok, grok.provider);
     try std.testing.expectEqualStrings("grok-model", grok.model);
