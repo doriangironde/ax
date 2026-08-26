@@ -66,6 +66,16 @@ cd tests/e2e && bun install
 cd ../evals && bun install            # only if running live evals
 ```
 
+### Sandbox limitation: tmux cannot fork (affects every TUI test)
+
+Since 2026-08-26 the DSH file sandbox denies `fork()` inside the tmux server:
+every `tmux new-session` fails with `create window failed: fork failed:
+Operation not permitted`. All tmux-based e2e suites (tui-*, mcp-* TUI cases,
+prompt-history TUI cases) fail at session creation, not in app code. Run them
+in an unsandboxed shell or on CI. The picker/layout changes were verified
+instead by their unit tests (`auth_runtime` PickerView tests), the CLI suite,
+and live `ax` drives.
+
 ### tmux hygiene (required on this machine)
 
 The tmux default server wedges when its working directory is deleted (a test
@@ -91,10 +101,10 @@ pane = the process spawned and exited, i.e. wedge or early-exit, not a crash).
 | Suite | Command | Result |
 |---|---|---|
 | Zig unit | `zig build test` | 8538/8541, 3 skipped; 3 fails + 1 leak = the sandbox-environment set only (PTY/Keychain/raw-mode denials + the pre-existing `terminal start` leak; byte-identical on pristine upstream code under the same sandbox). Includes the 25+ custom-provider tests and the v0.0.6 additions. Unsandboxed shell shows the historical counts below. |
-| CLI e2e | `bun test cli.test.ts` | 112/112 |
-| e2e non-TUI | `bun test config-persistence.test.ts prompt-history.test.ts` | pass |
+| CLI e2e | `bun test cli.test.ts` | 110/117 pass, 5 skip (live-key evals); 2 fails = macOS Keychain sandbox denial only |
+| e2e non-TUI | `bun test config-persistence.test.ts prompt-history.test.ts` | pass (their TUI-dependent cases need tmux, see below) |
 | ACP + gateway | `bun test acp.test.ts ./gateway-stream-lifecycle.test.ts ./tmux-helpers.test.ts` | pass (last verified 298/0 across these + cli + persistence) |
-| MCP e2e | `bun test ./mcp-stdio.test.ts ./mcp-http.test.ts ./mcp-legacy-remote.test.ts ./mcp-auth.test.ts ./session-recovery.test.ts` | 208/208 |
+| MCP e2e | `bun test ./mcp-stdio.test.ts ./mcp-http.test.ts ./mcp-legacy-remote.test.ts ./mcp-auth.test.ts ./session-recovery.test.ts` | non-TUI cases pass; TUI cases blocked by the sandbox tmux fork denial (below) |
 | MCP conformance | `cd tests/e2e/conformance && npm ci && npm test` (needs `zig` on PATH) | PASSED |
 | tui-startup | 10/10 | |
 | tui-slash-menu | 38/38 | (was 37/38 until G4 fix) |
