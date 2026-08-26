@@ -107,6 +107,33 @@ function resolvePaneId(tmuxPrefix: string[], name: string): string {
 }
 
 /**
+ * Whether the tmux server uses the default window and pane indexing. Servers
+ * with the defaults answer `name:0.0` targets without any query (upstream
+ * harness behavior); only non-default `base-index`/`pane-base-index`
+ * configurations (for example a user tmux.conf setting `base-index 1`) need
+ * the explicit resolution, which queries a just-created server and can race.
+ */
+function serverUsesDefaultIndices(tmuxPrefix: string[]): boolean {
+  try {
+    const base = execFileSync(
+      "tmux",
+      [...tmuxPrefix, "show-options", "-gv", "base-index"],
+      { stdio: "pipe", encoding: "utf-8" },
+    ).trim();
+    const pane = execFileSync(
+      "tmux",
+      [...tmuxPrefix, "show-options", "-gv", "pane-base-index"],
+      { stdio: "pipe", encoding: "utf-8" },
+    ).trim();
+    return base === "0" && pane === "0";
+  } catch {
+    // The server could not answer options queries yet; fall back to the
+    // explicit resolution path, which retries briefly.
+    return false;
+  }
+}
+
+/**
  * Reads a display-message property from a just-created session. A brand-new
  * tmux server may briefly refuse display-message on heavily loaded runners,
  * so the query retries briefly before failing.
@@ -709,8 +736,11 @@ export class TmuxSession {
       rmSync(exitStatusPath, { force: true });
       throw err;
     }
-    const resolvedWindowIndex = resolveWindowIndex(tmuxPrefix, name);
-    const resolvedPaneId = resolvePaneId(tmuxPrefix, name);
+    const defaultIndices = serverUsesDefaultIndices(tmuxPrefix);
+    const resolvedWindowIndex = defaultIndices ? 0 : resolveWindowIndex(tmuxPrefix, name);
+    const resolvedPaneId = defaultIndices
+      ? `${name}:0.0`
+      : resolvePaneId(tmuxPrefix, name);
     const session = new TmuxSession(
       name,
       exitStatusPath,
