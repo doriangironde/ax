@@ -534,7 +534,16 @@ pub const PickerView = struct {
 
     pub fn choiceLabel(self: PickerView, choice: Choice) []const u8 {
         return switch (choice) {
-            .provider => |provider| provider_catalog.label(provider),
+            .provider => |provider| switch (provider) {
+                .gateway, .codex, .grok => provider_catalog.label(provider),
+                // Custom providers have no catalog entry; label from the
+                // active registered name when one is known. The setup hub's
+                // "Model provider" row renders the active provider.
+                .custom => if (self.active_custom_provider.len > 0)
+                    customProviderLabel(self.active_custom_provider)
+                else
+                    "Custom provider",
+            },
             .custom_provider => |name| customProviderLabel(name),
             .custom_provider_preset => |name| customProviderLabel(name),
 
@@ -2914,6 +2923,32 @@ test "login root stage shows the setup hub before the provider stage rows" {
     try std.testing.expect(taken != null);
     try std.testing.expect((Choice{ .custom_provider = "opencode-go" }).eql(taken.?));
     try std.testing.expect(!runtime.pickerView().active);
+}
+
+test "setup hub labels an active custom provider without a catalog entry" {
+    const view = PickerView{
+        .active = true,
+        .available_sources = .{},
+        .selected_choice = null,
+        .active_source = null,
+        .active_provider = .custom,
+        .active_custom_provider = "opencode-go",
+        .include_skip = false,
+        .stage = .root,
+    };
+    try std.testing.expectEqualStrings("OpenCode Go", view.choiceLabel(.{ .provider = .custom }));
+    try std.testing.expect((Choice{ .action = .switch_provider }).eql(view.choiceAt(1).?));
+
+    const unnamed = PickerView{
+        .active = true,
+        .available_sources = .{},
+        .selected_choice = null,
+        .active_source = null,
+        .active_provider = .custom,
+        .include_skip = false,
+        .stage = .root,
+    };
+    try std.testing.expectEqualStrings("Custom provider", unnamed.choiceLabel(.{ .provider = .custom }));
 }
 
 test "provider stage lists unregistered presets after custom names" {
