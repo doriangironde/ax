@@ -533,7 +533,7 @@ function createManySkillsMenuFixture(count: number) {
 
 function visibleFxSkillNames(grid: string[]): string[] {
   return grid
-    .filter((line) => line.includes("skill-") && line.includes("Fx · Global"))
+    .filter((line) => line.includes("skill-") && line.includes("ax · Global"))
     .map((line) => line.match(/skill-\d+/)?.[0])
     .filter((name): name is string => name !== undefined);
 }
@@ -2356,9 +2356,9 @@ expect(pane).toContain("𝒂x");
       expect(pane).toContain("Codex");
       expect(pane).toContain("Agents");
       expect(pane).toContain("managed-menu");
-      expect(pane).toContain("Fx · Global");
+      expect(pane).toContain("ax · Global");
       expect(pane).toContain("workspace-menu");
-      expect(pane).toContain("Fx · Workspace");
+      expect(pane).toContain("ax · Workspace");
       expect(pane).toContain("↑↓ Navigate");
       expect(pane).toContain("Enter Use");
 
