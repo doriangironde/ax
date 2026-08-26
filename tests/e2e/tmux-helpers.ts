@@ -120,13 +120,21 @@ function sweepStaleSocketDirs(tmuxPrefix: string[]): void {
   try {
     for (const entry of readdirSync(tmpDir)) {
       if (!entry.startsWith("tmux-")) continue;
-      const pid = Number.parseInt(entry.slice("tmux-".length), 10);
-      if (!Number.isInteger(pid) || pid <= 0) continue;
+      const dir = join(tmpDir, entry);
       try {
-        process.kill(pid, 0);
-      } catch {
-        rmSync(join(tmpDir, entry), { recursive: true, force: true });
-      }
+        // A live server owns a "default" socket file in its dir; an exited
+        // server unlinks it, so a dir without the socket is stale even when
+        // its pid number has been recycled by another process.
+        if (existsSync(join(dir, "default"))) continue;
+        const pid = Number.parseInt(entry.slice("tmux-".length), 10);
+        if (Number.isInteger(pid) && pid > 0) {
+          try {
+            process.kill(pid, 0);
+            continue;
+          } catch {}
+        }
+        rmSync(dir, { recursive: true, force: true });
+      } catch {}
     }
   } catch {}
 }
