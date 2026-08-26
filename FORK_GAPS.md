@@ -17,6 +17,11 @@ of this fork's history. Read it top to bottom before touching code.
     OpenAI-compatible transport; see G10 below).
   - `00e3f4f` — merge upstream `v0.0.6` with the fork identity, G10, and the
     picker hub re-applied (see "v0.0.6 sync notes" below).
+  - `982143c` — merge latest upstream `main` (85 commits past `00e3f4f`) with
+    the fork identity re-applied (see "Round 2 sync notes" in G7). On local
+    branch `sync-upstream`; **not pushed or merged to `main` yet** — the fork's
+    GitHub `main` now carries only the pre-sync history plus the 0.0.7 release
+    prep (PR #1, branch `prepare-v0.0.7`).
 - The binary is `./zig-out/bin/ax`. **Always use this binary for
   verification.** Never run a `PATH`-installed `fx`.
 
@@ -540,6 +545,69 @@ Also remember the auto-review classifier's SHA-256 check:
 `auto_classifier.zig` "automatic review policy matches the tested XML v1
 artifact" — any change to the template text requires recomputing the digest
 (the test computes actual; copy the new digest into `expected_digest`).
+
+**Round 2 sync notes (2026-08-26, merge `982143c`, from upstream `main`
+`b8ebe21`).** The fork tracked latest upstream main (85 commits: provider
+usage ledger, inline skill picker, natural-language capability discovery,
+streamlined sign-in UI, prompt-submit latency, e2e hardening). What it took:
+
+- **The only merge conflict** was `tests/e2e/tui-slash-menu.test.ts`: upstream
+  now renders the skills menu INLINE (main screen stays visible; no new
+  alternate-buffer enter). Fork's alternate-buffer assertions were replaced by
+  upstream's inline assertions with the `𝒂x` glyph.
+- **Sweep:** the G7 commands, with the test glob extended to
+  `tests/e2e/*.ts` (helpers like `tmux-helpers.ts`, `ui-observer.ts`,
+  `conditional-guidance-oracle.ts`, `permission-mode-context.ts` need it).
+  Content sweep (user-facing copy) is wanted this round: browser-capability
+  text, "questions about ax" prompt line, doctor `ax session`, skills help
+  "ax workspace roots", oracle regex "subagent inside ax".
+- **Restores (this round's sweep misses, all fixed by hand):**
+  MCP `clientInfo` `"fx"` at all four emission sites (escaped-quote wire
+  strings defeat the `"fx"` protect — mcp_runtime.zig x3, tool_subscription);
+  `_meta.fx.continueRecovery` (acp/prompt.zig parse + test input +
+  acp.test.ts — the escaped-quote `\"ax\"` form defeated the restore regex,
+  recheck with `grep 'ax.*continueRecovery'`); G4 `[fx]` label
+  (skills_menu_presentation + tui-slash-menu:2537) and the `fx,` enum member;
+  `fx-recordings`/`fx-record-*` tape dirs; `originator=fx`/`referrer=fx`
+  OAuth URL params; `id=fx-grok-auth` hyperlink; test-local identifier and
+  fixture renames (`fx` dir vars in native_session/store fixtures, tool_args
+  JSON input, assistant_presentation test inputs, skill_search `fx-review`);
+  `vercel-labs/fx` git-URL fixtures in context.zig; sdk
+  `test-term-workspace.mjs` copy switched to `ax` (matches the binary's
+  browser-capabilities text); the `fx.sh` line in context.zig shielded the
+  adjacent "questions about fx" — fixed to "questions about ax" by hand.
+- **API adaptations:** `UsageOutcome` lost `.immediate`; the custom transport
+  now sets `.unavailable = .possibly_billed` (mirrors the codex billing
+  fallback). `session_usage.exactUsageOrigin` gained
+  `.custom => "exact/custom"`. `TestAuth`/`TestApp` gained stubs for the
+  fork's key-entry surface (`customProviderKeyEntryActive`,
+  `customKeyEntryProviderName`, `takeApiKeyBuffer`, `exitApiKeyStage`,
+  `adoptCredential`, `openProviderPicker`, `openCustomProviderKeyPicker`,
+  `stream`/`worker`/`workspace_root` fields, `selected_model` is now an
+  `ArrayList` with deinit). `ApiKeyExitReason` (auth_runtime.zig) needed
+  `pub`. SHA-256 digests recomputed in `auto_classifier.zig` and
+  `builtins/tools.zig` after the sweep changed the hashed text.
+- **release.yml:** upstream's signed+notarized macos-x86_64 job hardcodes
+  Vercel's Apple identity and needs Apple secrets the fork does not have; it
+  was replaced by the fork's previous unsigned cross-compiled matrix entry
+  (`macos-x86_64` back in `build-linux`, `needs` updated to
+  `[check-version, build-linux, build-macos-arm64]`).
+  `scripts/sign-and-notarize-macos.sh` stays on disk, unused.
+- **Verification (this machine, sandboxed shell):** `zig build test`
+  8647/8654 pass, 3 skipped; the 4 failures + leak are the documented
+  sandbox-environment set (PTY drains, Keychain `USER unset`, enableRawMode
+  x2 — upstream added a second raw-mode test) plus the pre-existing `terminal
+  start` leak; `zig fmt --check` clean; `cli.test.ts` 110/117 (2 Keychain
+  fails); custom-provider e2e green via `scripts/local-mock-openai.py`
+  (provider select, models list, plain + tool-call `ax ask` roundtrips).
+  TUI suites still need tmux (sandbox fork denial) — CI is the gate.
+- **Sequence note:** the first release prep (`prepare-v0.0.7`, PR #1, v0.0.7)
+  was created from pre-sync `main` and is independent of this merge. When
+  both are on `main`, the CHANGELOG fork section merges trivially; the sync
+  bullet and the release markers live in different sections.
+- **Next planned feature:** G10 v2 item 3 — live `/v1/models` catalog refresh
+  for custom providers (`ax provider refresh <name>`); the local mock server
+  will need a `/v1/models` endpoint for the e2e.
 
 ### G8 — Known residual `fx` strings (inventory, all intentional)
 
