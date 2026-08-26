@@ -3372,7 +3372,7 @@ const RoutingFakeApp = struct {
 
     pub fn applyAuthPickerChoice(self: *RoutingFakeApp, choice: auth_runtime.Choice) !void {
         switch (choice) {
-            .provider => {},
+            .provider, .custom_provider, .custom_provider_preset => {},
             .source => |source| _ = try self.selectCredentialSource(source),
             .action => |action| self.selected_auth_action = action,
             .team => |index| self.selected_auth_team = index,

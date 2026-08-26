@@ -1,4 +1,5 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const api_key_validator = @import("api_key_validator.zig");
 const credentials = @import("credentials.zig");
 const chatgpt_oauth = @import("chatgpt_oauth.zig");
@@ -7,6 +8,8 @@ const host = @import("../hosts/host.zig");
 const host_target = @import("../hosts/target.zig");
 const login_flow = @import("login_flow.zig");
 const model_provider = @import("../config/model_provider.zig");
+const custom_providers = @import("../config/custom_providers.zig");
+const provider_presets = @import("../config/provider_presets.zig");
 const oauth_transport = @import("oauth_transport.zig");
 const secret = @import("secret.zig");
 const debug_trace = @import("../shared/debug_trace.zig");
@@ -336,8 +339,23 @@ const ApiKeyExitReason = enum {
     runtime_deinit,
 };
 
+/// Display name for a registered custom provider or preset row: the preset's
+/// curated label when the name matches the catalog, otherwise the raw
+/// registered name (custom registrations are user-chosen identifiers).
+pub fn customProviderLabel(name: []const u8) []const u8 {
+    if (provider_presets.presetNamed(name)) |preset| return preset.label;
+    return name;
+}
+
 pub const Choice = union(enum) {
     provider: model_provider.ProviderId,
+    /// A registered custom provider name, borrowed from the picker runtime's
+    /// name list.
+    custom_provider: []const u8,
+    /// A built-in preset name not yet registered, borrowed from the picker
+    /// runtime's preset list. The app registers the preset into providers.json
+    /// before switching to it.
+    custom_provider_preset: []const u8,
     source: credentials.Source,
     action: AcquisitionAction,
     team: usize,
@@ -346,18 +364,26 @@ pub const Choice = union(enum) {
         return switch (self) {
             .provider => |provider| switch (other) {
                 .provider => |other_provider| provider == other_provider,
-                .source, .action, .team => false,
+                .custom_provider, .custom_provider_preset, .source, .action, .team => false,
+            },
+            .custom_provider => |name| switch (other) {
+                .custom_provider => |other_name| std.mem.eql(u8, name, other_name),
+                .provider, .custom_provider_preset, .source, .action, .team => false,
+            },
+            .custom_provider_preset => |name| switch (other) {
+                .custom_provider_preset => |other_name| std.mem.eql(u8, name, other_name),
+                .provider, .custom_provider, .source, .action, .team => false,
             },
             .source => |source| switch (other) {
                 .source => |other_source| source == other_source,
-                .provider, .action, .team => false,
+                .provider, .custom_provider, .custom_provider_preset, .action, .team => false,
             },
             .action => |action| switch (other) {
-                .provider, .source, .team => false,
+                .provider, .custom_provider, .custom_provider_preset, .source, .team => false,
                 .action => |other_action| action == other_action,
             },
             .team => |team| switch (other) {
-                .provider, .source, .action => false,
+                .provider, .custom_provider, .custom_provider_preset, .source, .action => false,
                 .team => |other_team| team == other_team,
             },
         };
@@ -370,6 +396,13 @@ pub const PickerView = struct {
     selected_choice: ?Choice,
     active_source: ?credentials.Source,
     active_provider: model_provider.ProviderId = .gateway,
+    /// Registered custom provider names for the provider stage, borrowed from
+    /// the picker runtime.
+    custom_provider_names: []const []const u8 = &.{},
+    /// Built-in preset names for the provider stage, borrowed from the picker
+    /// runtime. Each is a preset not yet registered in providers.json.
+    preset_names: []const []const u8 = &.{},
+    active_custom_provider: []const u8 = "",
     include_skip: bool,
     stage: PickerStage = .root,
     fx_login_session_available: bool = false,
@@ -379,10 +412,18 @@ pub const PickerView = struct {
     sign_in: login_flow.SignInSnapshot = .{},
     sign_in_source: credentials.Source = .fx_login,
     api_key_mask_count: usize = 0,
+    /// Name of the custom provider whose API key the entry stage captures;
+    /// empty for the generic Gateway key flow.
+    api_key_custom_provider: []const u8 = "",
 
     pub fn activeSourceLabel(self: PickerView) []const u8 {
         return sourceLabelOrMissing(self.active_source);
     }
+
+    /// Built-in provider rows shown before registered custom names. WASM
+    /// hosts support only the gateway and codex rows and never load custom
+    /// names.
+    const native_provider_choice_count: usize = if (host_target.is_wasm) 2 else 3;
 
     pub fn choiceCount(self: PickerView) usize {
         return switch (self.stage) {
@@ -391,8 +432,8 @@ pub const PickerView = struct {
             else if (comptime host_target.is_wasm)
                 4
             else
-                7,
-            .provider => if (comptime host_target.is_wasm) 2 else 3,
+                7 + self.custom_provider_names.len + self.preset_names.len,
+            .provider => native_provider_choice_count + self.custom_provider_names.len + self.preset_names.len,
             .sign_in, .api_key => 0,
             .change_team => blk: {
                 var count: usize = 0;
@@ -434,16 +475,44 @@ pub const PickerView = struct {
                 1 => .{ .action = .chatgpt_login },
                 2 => .{ .action = .grok_login },
                 3 => .{ .action = .setup },
-                4 => .{ .action = .switch_provider },
-                5 => .{ .action = .change_team },
-                6 => .{ .action = .switch_credential },
-                else => null,
+                else => blk: {
+                    // Registered custom providers and unregistered presets sit
+                    // directly on the login menu, before the management rows.
+                    const extra = index - 4;
+                    if (extra < self.custom_provider_names.len) {
+                        break :blk .{ .custom_provider = self.custom_provider_names[extra] };
+                    }
+                    const preset_index = extra - self.custom_provider_names.len;
+                    if (preset_index < self.preset_names.len) {
+                        break :blk .{ .custom_provider_preset = self.preset_names[preset_index] };
+                    }
+                    break :blk switch (extra - self.custom_provider_names.len - self.preset_names.len) {
+                        0 => .{ .action = .switch_provider },
+                        1 => .{ .action = .change_team },
+                        2 => .{ .action = .switch_credential },
+                        else => null,
+                    };
+                },
             },
-            .provider => switch (index) {
-                0 => .{ .provider = .gateway },
-                1 => .{ .provider = .codex },
-                2 => if (comptime host_target.is_wasm) null else .{ .provider = .grok },
-                else => null,
+            .provider => blk: {
+                const native_count = native_provider_choice_count;
+                if (index < native_count) {
+                    break :blk switch (index) {
+                        0 => .{ .provider = .gateway },
+                        1 => .{ .provider = .codex },
+                        2 => .{ .provider = .grok },
+                        else => null,
+                    };
+                }
+                const custom_index = index - native_count;
+                if (custom_index < self.custom_provider_names.len) {
+                    break :blk .{ .custom_provider = self.custom_provider_names[custom_index] };
+                }
+                const preset_index = custom_index - self.custom_provider_names.len;
+                if (preset_index < self.preset_names.len) {
+                    break :blk .{ .custom_provider_preset = self.preset_names[preset_index] };
+                }
+                break :blk null;
             },
             .sign_in, .api_key => null,
             .change_team => blk: {
@@ -481,6 +550,8 @@ pub const PickerView = struct {
     pub fn choiceLabel(self: PickerView, choice: Choice) []const u8 {
         return switch (choice) {
             .provider => |provider| model_provider.label(provider),
+            .custom_provider => |name| customProviderLabel(name),
+            .custom_provider_preset => |name| customProviderLabel(name),
             .source => |source| credentials.sourceLabel(source),
             .action => |action| switch (action) {
                 .login => "Sign in with Vercel",
@@ -499,6 +570,8 @@ pub const PickerView = struct {
     pub fn choiceDescription(self: PickerView, choice: Choice) []const u8 {
         return switch (choice) {
             .provider => |provider| if (provider == self.active_provider) "current" else "available",
+            .custom_provider => |name| if (self.active_provider == .custom and std.mem.eql(u8, self.active_custom_provider, name)) "current" else "available",
+            .custom_provider_preset => "",
             .source => |source| if (self.active_source == source) "current" else "available",
             .action => |action| switch (action) {
                 .login => if (self.fx_login_session_available) "connected" else "",
@@ -517,7 +590,7 @@ pub const PickerView = struct {
             .action => |action| (action != .change_team or self.fx_login_session_available) and
                 (action != .chatgpt_login or !host_target.is_wasm) and
                 (action != .grok_login or !host_target.is_wasm),
-            .provider, .source, .team => true,
+            .provider, .custom_provider, .custom_provider_preset, .source, .team => true,
         };
     }
 
@@ -758,6 +831,14 @@ pub const Runtime = struct {
     picker_include_skip: bool = false,
     picker_stage: PickerStage = .root,
     provider_picker_active: model_provider.ProviderId = .gateway,
+    /// Owned names of registered custom providers shown in the provider stage.
+    provider_picker_custom: std.ArrayList([]u8) = .empty,
+    /// Owned names of built-in presets not yet registered, shown after the
+    /// registered custom providers. Selecting one registers the preset into
+    /// providers.json before switching.
+    provider_picker_presets: std.ArrayList([]u8) = .empty,
+    /// The current selected custom provider name, for the "current" row mark.
+    provider_picker_custom_active: std.ArrayList(u8) = .empty,
     fx_login_session_available: bool = false,
     team_selection: ?login_flow.TeamSelection = null,
     team_query: std.ArrayList(u8) = .empty,
@@ -765,6 +846,10 @@ pub const Runtime = struct {
     sign_in_source: credentials.Source = .fx_login,
     sign_in_returns_to_root: bool = false,
     api_key_input: std.ArrayList(u8) = .empty,
+    /// When the api-key stage is capturing a key for a registered custom
+    /// provider, the provider name lives here; empty means the generic
+    /// Gateway API-key flow.
+    api_key_custom_provider: std.ArrayList(u8) = .empty,
     api_key_returns_to_root: bool = false,
     api_key_save: ApiKeySaveRuntime = .{},
 
@@ -786,6 +871,12 @@ pub const Runtime = struct {
         self.exitApiKeyStage(alloc, .runtime_deinit);
         self.clearTeamSelection(alloc);
         self.team_query.deinit(alloc);
+        self.api_key_custom_provider.deinit(alloc);
+        for (self.provider_picker_custom.items) |name| alloc.free(name);
+        self.provider_picker_custom.deinit(alloc);
+        for (self.provider_picker_presets.items) |name| alloc.free(name);
+        self.provider_picker_presets.deinit(alloc);
+        self.provider_picker_custom_active.deinit(alloc);
         if (self.selected_credential) |*credential| credential.deinit(alloc);
         self.* = .{};
     }
@@ -951,10 +1042,29 @@ pub const Runtime = struct {
         self.openPickerWithSkip(alloc, true);
     }
 
+    /// Opens the login root picker and marks the currently selected provider,
+    /// so its row reads "current" instead of "available".
+    pub fn openPickerWithActiveProvider(
+        self: *Self,
+        alloc: Allocator,
+        active_provider: model_provider.ProviderId,
+        active_custom_provider: []const u8,
+    ) void {
+        self.openPicker(alloc);
+        self.provider_picker_active = active_provider;
+        self.provider_picker_custom_active.clearRetainingCapacity();
+        if (active_custom_provider.len > 0) {
+            self.provider_picker_custom_active.appendSlice(alloc, active_custom_provider) catch {};
+        }
+    }
+
     fn openPickerWithSkip(self: *Self, alloc: Allocator, include_skip: bool) void {
         self.exitSignInStage(alloc);
         self.exitApiKeyStage(alloc, .screen_replacement);
         self.clearTeamSelection(alloc);
+        // The login root stage lists registered custom providers and
+        // unregistered presets alongside the built-in sign-in ways.
+        self.refreshProviderPickerNames(alloc);
         self.picker_active = true;
         self.picker_include_skip = include_skip;
         self.picker_stage = .root;
@@ -968,6 +1078,9 @@ pub const Runtime = struct {
             .selected_choice = self.picker_selection,
             .active_source = self.credentialSource(),
             .active_provider = self.provider_picker_active,
+            .custom_provider_names = self.provider_picker_custom.items,
+            .preset_names = self.provider_picker_presets.items,
+            .active_custom_provider = self.provider_picker_custom_active.items,
             .include_skip = self.picker_include_skip,
             .stage = self.picker_stage,
             .fx_login_session_available = self.fx_login_session_available,
@@ -977,6 +1090,7 @@ pub const Runtime = struct {
             .sign_in = self.sign_in_flow.snapshot(),
             .sign_in_source = self.sign_in_source,
             .api_key_mask_count = @min(self.api_key_input.items.len, max_api_key_mask_glyphs),
+            .api_key_custom_provider = self.api_key_custom_provider.items,
         };
     }
 
@@ -1009,15 +1123,59 @@ pub const Runtime = struct {
         self: *Self,
         alloc: Allocator,
         active_provider: model_provider.ProviderId,
+        active_custom_provider: []const u8,
     ) void {
         self.exitSignInStage(alloc);
         self.exitApiKeyStage(alloc, .screen_replacement);
         self.clearTeamSelection(alloc);
+        self.refreshProviderPickerNames(alloc);
+        self.provider_picker_custom_active.clearRetainingCapacity();
+        if (active_custom_provider.len > 0) {
+            self.provider_picker_custom_active.appendSlice(alloc, active_custom_provider) catch {};
+        }
         self.picker_active = true;
         self.picker_include_skip = false;
         self.picker_stage = .provider;
         self.provider_picker_active = active_provider;
         self.picker_selection = .{ .provider = active_provider };
+    }
+
+    /// Clears the registered custom provider names and the unregistered preset
+    /// names, then reloads both from the registry file. Test and WASM builds
+    /// skip the registry load; tests seed the lists directly.
+    fn refreshProviderPickerNames(self: *Self, alloc: Allocator) void {
+        for (self.provider_picker_custom.items) |name| alloc.free(name);
+        self.provider_picker_custom.clearRetainingCapacity();
+        for (self.provider_picker_presets.items) |name| alloc.free(name);
+        self.provider_picker_presets.clearRetainingCapacity();
+        var loaded_presets: ?custom_providers.Registry = null;
+        defer if (loaded_presets) |*registry| registry.deinit(alloc);
+        if (comptime !host_target.is_wasm and !builtin.is_test) {
+            if (io_mod.getenv("HOME")) |home| {
+                loaded_presets = custom_providers.load(alloc, home) catch null;
+                if (loaded_presets) |*registry| {
+                    for (registry.entries.items) |*entry| {
+                        const name = alloc.dupe(u8, entry.name) catch break;
+                        self.provider_picker_custom.append(alloc, name) catch {
+                            alloc.free(name);
+                            break;
+                        };
+                    }
+                }
+            }
+        }
+        if (comptime !host_target.is_wasm and !builtin.is_test) {
+            for (&provider_presets.presets) |*preset| {
+                if (loaded_presets) |*registry| {
+                    if (registry.find(preset.name) != null) continue;
+                }
+                const name = alloc.dupe(u8, preset.name) catch break;
+                self.provider_picker_presets.append(alloc, name) catch {
+                    alloc.free(name);
+                    break;
+                };
+            }
+        }
     }
 
     pub fn teamPickerActive(self: *const Self) bool {
@@ -1067,6 +1225,43 @@ pub const Runtime = struct {
 
     pub fn openApiKeyPickerFromRoot(self: *Self, alloc: Allocator) void {
         self.openApiKeyPickerWithParent(alloc, true);
+    }
+
+    /// Opens the api-key entry stage for a registered custom provider. The
+    /// entered key is stored into providers.json by the app layer, not the
+    /// secret store.
+    pub fn openCustomProviderKeyPicker(self: *Self, alloc: Allocator, provider_name: []const u8) void {
+        self.exitSignInStage(alloc);
+        self.exitApiKeyStage(alloc, .screen_replacement);
+        self.clearTeamSelection(alloc);
+        self.api_key_custom_provider.clearRetainingCapacity();
+        self.api_key_custom_provider.appendSlice(alloc, provider_name) catch {};
+        self.picker_active = true;
+        self.picker_stage = .api_key;
+        self.picker_selection = null;
+        self.api_key_returns_to_root = false;
+    }
+
+    pub fn customProviderKeyEntryActive(self: *const Self) bool {
+        return self.apiKeyEntryActive() and self.api_key_custom_provider.items.len > 0;
+    }
+
+    /// Moves the entered key out of the runtime, leaving the source buffer
+    /// zeroed. The caller owns the returned bytes and must zero-and-free them.
+    pub fn takeApiKeyBuffer(self: *Self, alloc: Allocator) []u8 {
+        if (self.api_key_input.capacity > 0) {
+            const allocated = self.api_key_input.allocatedSlice();
+            const used = self.api_key_input.items.len;
+            const owned = alloc.dupe(u8, allocated[0..used]) catch return &.{};
+            secret.zeroAndFree(alloc, allocated);
+            self.api_key_input = .empty;
+            return owned;
+        }
+        return alloc.dupe(u8, "") catch &.{};
+    }
+
+    pub fn customKeyEntryProviderName(self: *const Self) []const u8 {
+        return self.api_key_custom_provider.items;
     }
 
     fn openApiKeyPickerWithParent(self: *Self, alloc: Allocator, returns_to_root: bool) void {
@@ -1295,11 +1490,12 @@ pub const Runtime = struct {
         switch (self.picker_stage) {
             .sign_in, .api_key => unreachable,
             .provider => switch (selected) {
-                .provider => self.closePicker(alloc),
+                .provider, .custom_provider, .custom_provider_preset => self.closePicker(alloc),
                 .source, .action, .team => unreachable,
             },
             .root => switch (selected) {
                 .provider => unreachable,
+                .custom_provider, .custom_provider_preset => self.closePicker(alloc),
                 .source => self.closePicker(alloc),
                 .action => |action| switch (action) {
                     .change_team => {},
@@ -1317,9 +1513,10 @@ pub const Runtime = struct {
             },
             .change_team => switch (selected) {
                 .team => {},
-                .provider, .source, .action => unreachable,
+                .provider, .custom_provider, .custom_provider_preset, .source, .action => unreachable,
             },
             .switch_credential => switch (selected) {
+                .custom_provider, .custom_provider_preset => unreachable,
                 .source => self.closePicker(alloc),
                 // Automatic is the only action this stage offers; the app
                 // handler clears the stored choice and closes the picker.
@@ -1431,6 +1628,10 @@ pub const Runtime = struct {
                     probeCredentialSource,
                     loadRuntimeCredentialSource,
                 )),
+            // Custom provider keys are resolved by the registered entry at
+            // startup. A session already carrying that source is current; a
+            // missing one is reported by `ensurePromptCredential`.
+            .custom => false,
         };
     }
 
@@ -1560,7 +1761,7 @@ pub const Runtime = struct {
             self.pickerView().choiceAt(0);
     }
 
-    fn exitApiKeyStage(self: *Self, alloc: Allocator, reason: ApiKeyExitReason) void {
+    pub fn exitApiKeyStage(self: *Self, alloc: Allocator, reason: ApiKeyExitReason) void {
         const byte_count = self.api_key_input.items.len;
         if (self.api_key_input.capacity > 0) {
             const allocated = self.api_key_input.allocatedSlice();
@@ -1568,6 +1769,7 @@ pub const Runtime = struct {
             self.api_key_input = .empty;
         }
         self.api_key_returns_to_root = false;
+        self.api_key_custom_provider.clearRetainingCapacity();
         if (byte_count > 0) {
             debug_trace.logf(
                 "auth",
@@ -2433,12 +2635,172 @@ test "switch credential stage includes the active source and pops to its root ac
     try std.testing.expect((Choice{ .action = .switch_credential }).eql(root_view.selected_choice.?));
 }
 
+test "provider stage includes registered custom names after builtins" {
+    const alloc = std.testing.allocator;
+    var runtime: Runtime = .{};
+    defer runtime.deinit(alloc);
+    // The test build skips registry loading, so seed the name list directly.
+    runtime.openProviderPicker(alloc, .custom, "opencode-go");
+    const name = try alloc.dupe(u8, "opencode-go");
+    try runtime.provider_picker_custom.append(alloc, name);
+
+    const view = runtime.pickerView();
+    try std.testing.expectEqual(PickerStage.provider, view.stage);
+    try std.testing.expectEqual(@as(usize, 4), view.choiceCount());
+    try std.testing.expectEqualStrings("Vercel AI Gateway", view.choiceLabel(view.choiceAt(0).?));
+    try std.testing.expectEqualStrings("Codex subscription", view.choiceLabel(view.choiceAt(1).?));
+    try std.testing.expectEqualStrings("Grok subscription", view.choiceLabel(view.choiceAt(2).?));
+    const custom_choice = view.choiceAt(3).?;
+    try std.testing.expectEqualStrings("OpenCode Go", view.choiceLabel(custom_choice));
+    try std.testing.expectEqualStrings("current", view.choiceDescription(custom_choice));
+    try std.testing.expect(view.choiceEnabled(custom_choice));
+
+    // A provider-stage custom choice closes the picker like builtin ones.
+    runtime.picker_selection = custom_choice;
+    const taken = runtime.takePickerChoice(alloc);
+    try std.testing.expect(taken != null);
+    try std.testing.expect(!runtime.pickerView().active);
+}
+
+test "custom provider choices compare by name" {
+    try std.testing.expect((Choice{ .custom_provider = "go" }).eql(.{ .custom_provider = "go" }));
+    try std.testing.expect(!(Choice{ .custom_provider = "go" }).eql(.{ .custom_provider = "grok" }));
+    try std.testing.expect(!(Choice{ .custom_provider = "go" }).eql(.{ .provider = .custom }));
+    try std.testing.expect(!(Choice{ .custom_provider = "go" }).eql(.{ .action = .switch_provider }));
+    try std.testing.expect(!(Choice{ .provider = .custom }).eql(.{ .custom_provider = "go" }));
+    try std.testing.expect((Choice{ .custom_provider_preset = "go" }).eql(.{ .custom_provider_preset = "go" }));
+    try std.testing.expect(!(Choice{ .custom_provider_preset = "go" }).eql(.{ .custom_provider_preset = "grok" }));
+    try std.testing.expect(!(Choice{ .custom_provider_preset = "go" }).eql(.{ .custom_provider = "go" }));
+    try std.testing.expect(!(Choice{ .custom_provider = "go" }).eql(.{ .custom_provider_preset = "go" }));
+}
+
+test "login root stage lists registered customs and presets before management rows" {
+    const alloc = std.testing.allocator;
+    var runtime: Runtime = .{};
+    defer runtime.deinit(alloc);
+    // The test build skips registry loading, so seed the lists directly.
+    runtime.openPicker(alloc);
+    const custom = try alloc.dupe(u8, "opencode-go");
+    try runtime.provider_picker_custom.append(alloc, custom);
+    const preset = try alloc.dupe(u8, "ollama");
+    try runtime.provider_picker_presets.append(alloc, preset);
+
+    const view = runtime.pickerView();
+    try std.testing.expectEqual(@as(usize, 9), view.choiceCount());
+    // The four built-in auth rows keep their positions.
+    try std.testing.expect((Choice{ .action = .login }).eql(view.choiceAt(0).?));
+    try std.testing.expect((Choice{ .action = .chatgpt_login }).eql(view.choiceAt(1).?));
+    try std.testing.expect((Choice{ .action = .grok_login }).eql(view.choiceAt(2).?));
+    try std.testing.expect((Choice{ .action = .setup }).eql(view.choiceAt(3).?));
+    // Registered custom providers and unregistered presets follow, exactly
+    // like the provider stage rows.
+    const custom_choice = view.choiceAt(4).?;
+    try std.testing.expect((Choice{ .custom_provider = "opencode-go" }).eql(custom_choice));
+    try std.testing.expectEqualStrings("OpenCode Go", view.choiceLabel(custom_choice));
+    try std.testing.expect(view.choiceEnabled(custom_choice));
+    const preset_choice = view.choiceAt(5).?;
+    try std.testing.expect((Choice{ .custom_provider_preset = "ollama" }).eql(preset_choice));
+    try std.testing.expectEqualStrings("Ollama", view.choiceLabel(preset_choice));
+    try std.testing.expectEqualStrings("", view.choiceDescription(preset_choice));
+    // The management rows shift behind them.
+    try std.testing.expect((Choice{ .action = .switch_provider }).eql(view.choiceAt(6).?));
+    try std.testing.expect((Choice{ .action = .change_team }).eql(view.choiceAt(7).?));
+    try std.testing.expect((Choice{ .action = .switch_credential }).eql(view.choiceAt(8).?));
+    try std.testing.expect(view.choiceAt(9) == null);
+
+    // Selecting a root custom provider closes the picker like the auth rows.
+    runtime.picker_selection = custom_choice;
+    const taken = runtime.takePickerChoice(alloc);
+    try std.testing.expect(taken != null);
+    try std.testing.expect((Choice{ .custom_provider = "opencode-go" }).eql(taken.?));
+    try std.testing.expect(!runtime.pickerView().active);
+}
+
+test "provider stage lists unregistered presets after custom names" {
+    const alloc = std.testing.allocator;
+    var runtime: Runtime = .{};
+    defer runtime.deinit(alloc);
+    // The test build skips registry loading, so seed the lists directly.
+    runtime.openProviderPicker(alloc, .custom, "opencode-go");
+    const custom = try alloc.dupe(u8, "opencode-go");
+    try runtime.provider_picker_custom.append(alloc, custom);
+    const preset = try alloc.dupe(u8, "ollama");
+    try runtime.provider_picker_presets.append(alloc, preset);
+
+    const view = runtime.pickerView();
+    try std.testing.expectEqual(@as(usize, 5), view.choiceCount());
+    const preset_choice = view.choiceAt(4).?;
+    try std.testing.expect((Choice{ .custom_provider_preset = "ollama" }).eql(preset_choice));
+    try std.testing.expectEqualStrings("Ollama", view.choiceLabel(preset_choice));
+    try std.testing.expectEqualStrings("", view.choiceDescription(preset_choice));
+    try std.testing.expect(view.choiceEnabled(preset_choice));
+
+    // A provider-stage preset choice closes the picker like the others.
+    runtime.picker_selection = preset_choice;
+    const taken = runtime.takePickerChoice(alloc);
+    try std.testing.expect(taken != null);
+    try std.testing.expect((Choice{ .custom_provider_preset = "ollama" }).eql(taken.?));
+    try std.testing.expect(!runtime.pickerView().active);
+}
+
+test "custom provider key entry captures a masked buffer and clears on exit" {
+    const alloc = std.testing.allocator;
+    var runtime: Runtime = .{};
+    defer runtime.deinit(alloc);
+    runtime.openCustomProviderKeyPicker(alloc, "opencode-go");
+
+    const view = runtime.pickerView();
+    try std.testing.expectEqual(PickerStage.api_key, view.stage);
+    try std.testing.expect(runtime.apiKeyEntryActive());
+    try std.testing.expect(runtime.customProviderKeyEntryActive());
+    try std.testing.expectEqualStrings("opencode-go", view.api_key_custom_provider);
+    try std.testing.expectEqualStrings("opencode-go", runtime.customKeyEntryProviderName());
+
+    _ = try runtime.appendApiKeyByte(alloc, 's');
+    _ = try runtime.appendApiKeyByte(alloc, 'k');
+    try std.testing.expectEqual(@as(usize, 2), runtime.pickerView().api_key_mask_count);
+
+    const taken = runtime.takeApiKeyBuffer(alloc);
+    defer secret.zeroAndFree(alloc, taken);
+    try std.testing.expectEqualStrings("sk", taken);
+    try std.testing.expect(runtime.pickerView().api_key_mask_count == 0);
+
+    runtime.exitApiKeyStage(alloc, .saved);
+    try std.testing.expect(!runtime.customProviderKeyEntryActive());
+    try std.testing.expectEqualStrings("", runtime.pickerView().api_key_custom_provider);
+}
+
+test "generic api key entry is not a custom provider capture" {
+    const alloc = std.testing.allocator;
+    var runtime: Runtime = .{};
+    defer runtime.deinit(alloc);
+    runtime.openApiKeyPickerFromRoot(alloc);
+    try std.testing.expect(runtime.apiKeyEntryActive());
+    try std.testing.expect(!runtime.customProviderKeyEntryActive());
+    try std.testing.expectEqualStrings("", runtime.customKeyEntryProviderName());
+}
+
+test "provider stage custom rows mark only the active name current" {
+    const alloc = std.testing.allocator;
+    var runtime: Runtime = .{};
+    defer runtime.deinit(alloc);
+    runtime.openProviderPicker(alloc, .custom, "opencode-go");
+    for ([_][]const u8{ "mock", "opencode-go" }) |entry_name| {
+        const owned = try alloc.dupe(u8, entry_name);
+        try runtime.provider_picker_custom.append(alloc, owned);
+    }
+    const view = runtime.pickerView();
+    try std.testing.expectEqual(@as(usize, 5), view.choiceCount());
+    try std.testing.expectEqualStrings("available", view.choiceDescription(view.choiceAt(3).?));
+    try std.testing.expectEqualStrings("current", view.choiceDescription(view.choiceAt(4).?));
+}
+
 test "provider stage pops to its setup root action" {
     const alloc = std.testing.allocator;
     var runtime: Runtime = .{};
     defer runtime.deinit(alloc);
     runtime.openPicker(alloc);
-    runtime.openProviderPicker(alloc, .codex);
+    runtime.openProviderPicker(alloc, .codex, "");
 
     try std.testing.expect(runtime.popPickerStage(alloc));
     const root_view = runtime.pickerView();

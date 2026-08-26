@@ -248,6 +248,9 @@ const AcpContext = struct {
                 .gateway => self.state.cfg.permission_reviewer_provider,
                 .codex => self.state.cfg.codex_permission_reviewer_provider,
                 .grok => self.state.cfg.grok_permission_reviewer_provider,
+                // Custom providers run no automatic review in v1; sensitive
+                // calls surface the direct permission prompt instead.
+                .custom => null,
             },
             .auto_classifier = self.auto_classifier,
             .subagent_host = self.state.subagent_host,

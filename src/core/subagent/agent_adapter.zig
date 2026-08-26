@@ -40,12 +40,20 @@ pub const ProviderRoutes = struct {
     gateway: ProviderRoute,
     codex: ProviderRoute,
     grok: ProviderRoute,
+    /// Route for the currently selected custom provider, if any. Selecting a
+    /// `.custom` provider without a route yields an unavailable stream and no
+    /// reviewer.
+    custom: ?ProviderRoute = null,
 
     pub fn select(self: ProviderRoutes, provider: model_provider.ProviderId) ProviderRoute {
         return switch (provider) {
             .gateway => self.gateway,
             .codex => self.codex,
             .grok => self.grok,
+            .custom => self.custom orelse .{
+                .agent_stream_provider = stream_provider.unavailable_provider,
+                .permission_reviewer_provider = null,
+            },
         };
     }
 };

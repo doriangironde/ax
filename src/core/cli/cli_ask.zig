@@ -14,6 +14,8 @@ const background_store = @import("../background/background_store.zig");
 const process_supervisor = @import("../background/process_supervisor.zig");
 const context_contract = @import("../workspace/context_contract.zig");
 const gateway_provider = @import("../gateway/gateway_provider.zig");
+const custom_providers = @import("../config/custom_providers.zig");
+const openai_compatible = @import("../../gateway/openai_compatible.zig");
 const model_catalog = @import("../gateway/model_catalog.zig");
 const background_process_provider = @import(
     "../execution/background_process_provider.zig",
@@ -285,6 +287,10 @@ fn runAskChild(
                 .agent_stream_provider = ctx.cfg.grok_agent_stream orelse agent_stream_provider.unavailable_provider,
                 .permission_reviewer_provider = ctx.cfg.grok_permission_reviewer_provider,
             },
+            .custom = .{
+                .agent_stream_provider = ctx.custom_stream orelse agent_stream_provider.unavailable_provider,
+                .permission_reviewer_provider = null,
+            },
         },
         .system_prompt = ctx.cfg.prompt_policy.system_prompt,
         .model_prompt_overlay = ctx.cfg.prompt_policy.modelPromptOverlay(admission.model),
@@ -527,6 +533,10 @@ const AskContext = struct {
     credential_source: ?types.CredentialSource = null,
     account_id: ?[]const u8 = null,
     provider: model_provider.ProviderId = .gateway,
+    custom_provider: []const u8 = "",
+    custom_registry: custom_providers.Registry = .{},
+    custom_stream: ?agent_stream_provider.Provider = null,
+    custom_catalog_context: ?custom_providers.StaticCatalogContext = null,
     model_catalog_access: credentials.CatalogAccess = .{ .public_only = .no_credential },
     model: []const u8 = "",
     agent_step_limit: usize = 0,
@@ -695,6 +705,9 @@ const AskContext = struct {
     }
 
     fn deinit(self: *AskContext) void {
+        self.custom_registry.deinit(self.alloc);
+        self.custom_catalog_context = null;
+        self.custom_stream = null;
         if (self.subagent_host) |subagent_host| subagent_host.deinit();
         self.subagent_host = null;
         self.terminal_client.deinit();
@@ -836,6 +849,10 @@ const AskContext = struct {
         const seed_preferences = session_codec.DurableSessionPreferences{
             .provider = self.provider,
             .model = @constCast(self.seed_model),
+            .custom_provider = if (self.provider == .custom and self.custom_provider.len > 0)
+                @constCast(self.custom_provider)
+            else
+                null,
             .effort = self.effort,
             .fast_mode = self.fast_mode,
         };
@@ -893,6 +910,8 @@ const AskContext = struct {
             const preferences = self.writable.?.state.preferences;
             self.provider = preferences.provider;
             self.model = preferences.model;
+            self.custom_provider = preferences.custom_provider orelse "";
+            self.resolveCustomRoutes();
             self.effort = preferences.effort;
             self.fast_mode = preferences.fast_mode;
         }
@@ -1061,6 +1080,9 @@ const AskContext = struct {
             .gateway => self.cfg.permission_reviewer_provider,
             .codex => self.cfg.codex_permission_reviewer_provider,
             .grok => self.cfg.grok_permission_reviewer_provider,
+            // Custom providers surface the direct prompt instead of an
+            // automatic review in v1.
+            .custom => null,
         } orelse
             return permission_auto_classifier.Classifier.disabled();
         return permission_auto_classifier.Classifier.withProvider(provider, .{
@@ -1074,11 +1096,32 @@ const AskContext = struct {
         });
     }
 
+    /// Loads the custom provider registry and builds the routing targets for
+    /// the selected custom provider. No-op for the built-in providers.
+    fn resolveCustomRoutes(self: *AskContext) void {
+        if (self.provider != .custom or self.custom_provider.len == 0) return;
+        if (self.custom_registry.entries.items.len > 0) return;
+        const home = io_mod.getenv("HOME") orelse return;
+        self.custom_registry = custom_providers.load(self.alloc, home) catch return;
+        const entry = self.custom_registry.find(self.custom_provider) orelse return;
+        self.custom_stream = openai_compatible.provider(entry);
+        self.custom_catalog_context = .{
+            .registry = &self.custom_registry,
+            .provider_name = entry.name,
+        };
+    }
+
+    fn customCatalogProvider(self: *const AskContext) ?model_catalog.Provider {
+        const context_ptr: *const custom_providers.StaticCatalogContext = &(self.custom_catalog_context orelse return null);
+        return custom_providers.staticCatalogProvider(context_ptr);
+    }
+
     fn agentStreamProvider(self: *const AskContext) agent_stream_provider.Provider {
         return switch (self.provider) {
             .gateway => self.cfg.gateway_provider.agent_stream,
             .codex => self.cfg.codex_agent_stream orelse agent_stream_provider.unavailable_provider,
             .grok => self.cfg.grok_agent_stream orelse agent_stream_provider.unavailable_provider,
+            .custom => self.custom_stream orelse agent_stream_provider.unavailable_provider,
         };
     }
 
@@ -1402,6 +1445,8 @@ fn missingCredentialResult(
         credentials.missing_chatgpt_credential_message
     else if (provider == .grok)
         credentials.missing_grok_credential_message
+    else if (provider == .custom)
+        "ax needs an API key for the selected custom provider. Set api_key_env in ~/.fx/providers.json and export the value, or set api_key there."
     else
         credentials.missing_credential_message;
     try options.deps.write_stderr(options.deps.stderr_ctx, "ax ask: ");
@@ -1487,6 +1532,8 @@ fn runPromptInternal(alloc: Allocator, prompt: []const u8, permission_override: 
     ctx.command_timeout_ms = options.command_timeout_ms;
     ctx.model = startup.selected_model;
     ctx.provider = startup.provider;
+    ctx.custom_provider = startup.custom_provider;
+    ctx.resolveCustomRoutes();
     ctx.seed_model = startup.configured_model;
     ctx.requested_resume = options.resume_target;
     ctx.agent_step_limit = startup.agent_step_limit;
@@ -1547,13 +1594,14 @@ fn runPromptInternal(alloc: Allocator, prompt: []const u8, permission_override: 
         &startup.credential.?
     else routed: {
         const preferred = if (startup.credential) |value| value.source else null;
-        const resolution = try credentials.resolveForProvider(
+        const resolution = try credentials.resolveForProviderWithCustom(
             alloc,
             cfg.gateway_provider.oauth_transport,
             cfg.secret_store,
             .refresh_if_needed,
             ctx.provider,
             preferred,
+            if (ctx.provider == .custom) ctx.custom_provider else null,
         );
         routed_credential = resolution.credential;
         if (routed_credential == null) {
@@ -2000,15 +2048,19 @@ fn reportUsage(raw_ctx: *anyopaque, usage: types.Usage) void {
 
 fn resolveModelCapabilities(raw_ctx: *anyopaque, _: Allocator, model: []const u8) model_capabilities.ResolveError!model_capabilities.Capabilities {
     const ctx: *AskContext = @ptrCast(@alignCast(raw_ctx));
-    const catalog = selectModelCatalog(
-        ctx.provider,
-        ctx.cfg.gateway_provider.model_catalog,
-        ctx.cfg.codex_model_catalog,
-        ctx.cfg.grok_model_catalog,
-    ) orelse return model_capabilities.capabilitiesForModel(model);
+    const catalog: ?model_catalog.Provider = if (ctx.provider == .custom)
+        ctx.customCatalogProvider()
+    else
+        selectModelCatalog(
+            ctx.provider,
+            ctx.cfg.gateway_provider.model_catalog,
+            ctx.cfg.codex_model_catalog,
+            ctx.cfg.grok_model_catalog,
+        );
+    const resolved_catalog = catalog orelse return model_capabilities.capabilitiesForModel(model);
     return ctx.capability_resolver.resolve(
         ctx.alloc,
-        catalog,
+        resolved_catalog,
         .{
             .access = ctx.model_catalog_access,
             .endpoint = ctx.cfg.gateway_models_path,
@@ -2028,6 +2080,7 @@ fn selectModelCatalog(
         .gateway => gateway,
         .codex => codex,
         .grok => grok,
+        .custom => null,
     };
 }
 
@@ -2046,21 +2099,27 @@ test "provider catalog selection never falls back across origins" {
     var grok_tag: u8 = 0;
     var grok = test_builtin_gateway.model_catalog_provider;
     grok.context = &grok_tag;
+    var custom_tag: u8 = 0;
+    var custom = test_builtin_gateway.model_catalog_provider;
+    custom.context = &custom_tag;
     const cases = [_]struct {
         provider: model_provider.ProviderId,
         codex: ?model_catalog.Provider,
         grok: ?model_catalog.Provider,
+        custom: ?model_catalog.Provider,
         expected_context: ?*anyopaque,
     }{
-        .{ .provider = .gateway, .codex = codex, .grok = grok, .expected_context = &gateway_tag },
-        .{ .provider = .codex, .codex = codex, .grok = grok, .expected_context = &codex_tag },
-        .{ .provider = .codex, .codex = null, .grok = grok, .expected_context = null },
-        .{ .provider = .grok, .codex = codex, .grok = grok, .expected_context = &grok_tag },
-        .{ .provider = .grok, .codex = codex, .grok = null, .expected_context = null },
+        .{ .provider = .gateway, .codex = codex, .grok = grok, .custom = null, .expected_context = &gateway_tag },
+        .{ .provider = .codex, .codex = codex, .grok = grok, .custom = null, .expected_context = &codex_tag },
+        .{ .provider = .codex, .codex = null, .grok = grok, .custom = null, .expected_context = null },
+        .{ .provider = .grok, .codex = codex, .grok = grok, .custom = null, .expected_context = &grok_tag },
+        .{ .provider = .grok, .codex = codex, .grok = null, .custom = null, .expected_context = null },
+        .{ .provider = .custom, .codex = codex, .grok = grok, .custom = custom, .expected_context = &custom_tag },
+        .{ .provider = .custom, .codex = codex, .grok = grok, .custom = null, .expected_context = null },
     };
 
     for (cases) |case| {
-        const selected = selectModelCatalog(case.provider, gateway, case.codex, case.grok);
+        const selected = if (case.provider == .custom) null else selectModelCatalog(case.provider, gateway, case.codex, case.grok);
         if (case.expected_context) |expected| {
             try std.testing.expect(selected != null);
             try std.testing.expect(selected.?.context.? == expected);

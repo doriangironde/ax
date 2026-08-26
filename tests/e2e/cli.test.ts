@@ -4937,3 +4937,160 @@ describe("cli: workspace access", () => {
     30_000,
   );
 });
+
+describe("cli: provider presets", () => {
+  function providerEnv(home: string): Record<string, string | undefined> {
+    return {
+      ...NO_GATEWAY_AUTH,
+      HOME: home,
+    };
+  }
+
+  test(
+    "ax provider with no arguments lists builtins, registered providers, and presets",
+    async () => {
+      const home = createIsolatedTestHome();
+      try {
+        const result = await runFx(["provider"], { env: providerEnv(home) });
+        expect(result.code).toBe(0);
+        expect(result.stderr).toBe("");
+        expect(result.stdout).toContain("Built-in providers: gateway, codex, grok");
+        expect(result.stdout).toContain("Registered custom providers (providers.json): none");
+        expect(result.stdout).toContain("openrouter");
+        expect(result.stdout).toContain("ollama");
+        expect(result.stdout).toContain("deepseek");
+      } finally {
+        cleanupIsolatedTestHome(home);
+      }
+    },
+    TIMEOUT,
+  );
+
+  test(
+    "ax provider <preset> registers the preset and selects a keyless provider",
+    async () => {
+      const home = createIsolatedTestHome();
+      try {
+        const result = await runFx(["provider", "ollama"], { env: providerEnv(home) });
+        expect(result.code).toBe(0);
+        expect(result.stdout).toContain("Registered ollama from built-in presets in providers.json.");
+        expect(result.stdout).toContain("Provider set to ollama (custom).");
+
+        const providers = JSON.parse(
+          readFileSync(join(home, ".fx", "providers.json"), "utf8"),
+        );
+        const ollama = providers.providers.find(
+          (entry: { name: string }) => entry.name === "ollama",
+        );
+        expect(ollama).toBeDefined();
+        expect(ollama.base_url).toBe("http://localhost:11434/v1");
+        expect(ollama.keyless).toBe(true);
+        expect(ollama.api_key_env).toBeUndefined();
+        expect(ollama.models.length).toBeGreaterThan(0);
+
+        const settings = JSON.parse(
+          readFileSync(join(home, ".fx", "settings.json"), "utf8"),
+        );
+        expect(settings.provider).toBe("custom");
+        expect(settings.custom_provider).toBe("ollama");
+      } finally {
+        cleanupIsolatedTestHome(home);
+      }
+    },
+    TIMEOUT,
+  );
+
+  test(
+    "registering the same preset twice is idempotent",
+    async () => {
+      const home = createIsolatedTestHome();
+      try {
+        const first = await runFx(["provider", "ollama"], { env: providerEnv(home) });
+        expect(first.code).toBe(0);
+        const second = await runFx(["provider", "ollama"], { env: providerEnv(home) });
+        expect(second.code).toBe(0);
+        expect(second.stdout).not.toContain("Registered ollama");
+        expect(second.stdout).toContain("Custom provider is already selected.");
+
+        const providers = JSON.parse(
+          readFileSync(join(home, ".fx", "providers.json"), "utf8"),
+        );
+        const ollamaEntries = providers.providers.filter(
+          (entry: { name: string }) => entry.name === "ollama",
+        );
+        expect(ollamaEntries).toHaveLength(1);
+      } finally {
+        cleanupIsolatedTestHome(home);
+      }
+    },
+    TIMEOUT,
+  );
+
+  test(
+    "ax provider <preset> without a key registers and then reports the key requirement",
+    async () => {
+      const home = createIsolatedTestHome();
+      try {
+        const result = await runFx(["provider", "openrouter"], { env: providerEnv(home) });
+        expect(result.code).not.toBe(0);
+        expect(result.stdout).toContain("Registered openrouter from built-in presets in providers.json.");
+        expect(result.stderr).toContain("needs an API key");
+
+        const providers = JSON.parse(
+          readFileSync(join(home, ".fx", "providers.json"), "utf8"),
+        );
+        const openrouter = providers.providers.find(
+          (entry: { name: string }) => entry.name === "openrouter",
+        );
+        expect(openrouter).toBeDefined();
+        expect(openrouter.api_key_env).toBe("OPENROUTER_API_KEY");
+        expect(openrouter.api_key).toBeUndefined();
+        expect(openrouter.keyless).toBeUndefined();
+      } finally {
+        cleanupIsolatedTestHome(home);
+      }
+    },
+    TIMEOUT,
+  );
+
+  test(
+    "ax provider <preset> merges into an existing providers.json",
+    async () => {
+      const home = createIsolatedTestHome();
+      try {
+        mkdirSync(join(home, ".fx"), { recursive: true });
+        writeFileSync(
+          join(home, ".fx", "providers.json"),
+          JSON.stringify({
+            providers: [
+              {
+                name: "opencode-go",
+                base_url: "https://opencode.ai/zen/go/v1",
+                api_key: "sk-existing",
+                models: [{ id: "glm-5.2" }],
+              },
+            ],
+          }),
+        );
+        const result = await runFx(["provider", "ollama"], { env: providerEnv(home) });
+        expect(result.code).toBe(0);
+
+        const providers = JSON.parse(
+          readFileSync(join(home, ".fx", "providers.json"), "utf8"),
+        );
+        expect(providers.providers).toHaveLength(2);
+        const opencode = providers.providers.find(
+          (entry: { name: string }) => entry.name === "opencode-go",
+        );
+        expect(opencode.api_key).toBe("sk-existing");
+        const ollama = providers.providers.find(
+          (entry: { name: string }) => entry.name === "ollama",
+        );
+        expect(ollama.keyless).toBe(true);
+      } finally {
+        cleanupIsolatedTestHome(home);
+      }
+    },
+    TIMEOUT,
+  );
+});

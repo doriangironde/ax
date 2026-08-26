@@ -8,6 +8,7 @@ const types = @import("../shared/types.zig");
 const workspace_access = @import("../workspace/workspace_access.zig");
 const settings_store = @import("settings_store.zig");
 const model_provider = @import("model_provider.zig");
+const custom_providers = @import("custom_providers.zig");
 const update_target = @import("../upgrade/update_target.zig");
 pub const context_limits = @import("context_limits.zig");
 
@@ -39,6 +40,8 @@ pub const Settings = struct {
     provider: ?model_provider.ProviderId = null,
     codex_model: ?[]u8 = null,
     grok_model: ?[]u8 = null,
+    /// Registered custom provider name; paired with `provider == .custom`.
+    custom_provider: ?[]u8 = null,
     permission_mode: ?types.PermissionMode = null,
     credential_source: ?types.CredentialSource = null,
     yolo_acknowledged: ?bool = null,
@@ -67,6 +70,7 @@ pub const Settings = struct {
         if (self.model) |value| alloc.free(value);
         if (self.codex_model) |value| alloc.free(value);
         if (self.grok_model) |value| alloc.free(value);
+        if (self.custom_provider) |value| alloc.free(value);
         self.permission_rules.deinit(alloc);
         self.* = .{};
     }
@@ -536,6 +540,7 @@ fn isProfileOnlySettingKey(key: []const u8) bool {
         "provider",
         "codex_model",
         "grok_model",
+        "custom_provider",
         "effort",
         "fast_mode",
         "slash_menu_categories",
@@ -1281,6 +1286,13 @@ fn parseProfileOnlyFields(
         settings.grok_model = try alloc.dupe(u8, model_value.string);
     }
 
+    if (root.object.get("custom_provider")) |provider_value| {
+        if (provider_value != .string) return error.InvalidCustomProviderType;
+        const trimmed = std.mem.trim(u8, provider_value.string, " \t\r\n");
+        if (!custom_providers.validName(trimmed)) return error.InvalidCustomProviderValue;
+        settings.custom_provider = try alloc.dupe(u8, trimmed);
+    }
+
     if (root.object.get("permission_mode")) |permission_mode_value| {
         const value = permission_mode_value;
         if (value != .string) return error.InvalidPermissionModeType;
@@ -1445,6 +1457,11 @@ fn mergeSettings(target: *Settings, incoming: *Settings, alloc: Allocator) void 
         if (target.grok_model) |current| alloc.free(current);
         target.grok_model = value;
         incoming.grok_model = null;
+    }
+    if (incoming.custom_provider) |value| {
+        if (target.custom_provider) |current| alloc.free(current);
+        target.custom_provider = value;
+        incoming.custom_provider = null;
     }
     if (incoming.permission_mode) |value| target.permission_mode = value;
     if (incoming.credential_source) |value| target.credential_source = value;

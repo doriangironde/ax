@@ -7,6 +7,8 @@ bun.lock
 
 # Zig build output and fetched packages
 .zig-cache/
+.zig-global-cache/
+.zig-cache-global/
 zig-cache/
 zig-out/
 zig-pkg/

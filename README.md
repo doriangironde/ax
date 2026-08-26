@@ -62,6 +62,54 @@ ax
 
 The current directory becomes the primary workspace. Enter a prompt, or run `/help` to browse interactive commands.
 
+### Custom providers
+
+ax can run against any OpenAI-compatible endpoint. Register providers in `~/.fx/providers.json`:
+
+```json
+{
+  "providers": [
+    {
+      "name": "opencode-go",
+      "base_url": "https://opencode.ai/zen/go/v1",
+      "api_key_env": "OPENCODE_GO_API_KEY",
+      "api_type": "openai-completions",
+      "models": [
+        {
+          "id": "glm-4.6",
+          "context_window": 200000,
+          "reasoning": true,
+          "vision": true,
+          "max_output_tokens": 32768
+        }
+      ]
+    }
+  ]
+}
+```
+
+`base_url` is the API root; ax requests `<base_url>/chat/completions`. Keys resolve from `api_key_env` (recommended) or inline `api_key`. Each model entry may declare `context_window`, `max_output_tokens`, `reasoning`, `vision`, and `file_input`. Endpoints without a key or with no models cannot be selected.
+
+Select a registered provider with `ax provider <name>` (for example `ax provider opencode-go`). Inside ax, run `/login`: the menu lists the built-in sign-in ways followed by every registered custom provider and unregistered preset, so a direct pickup needs no extra step — choosing a preset registers it first, and a provider without a key asks for one inline. List its models with `ax models`, and switch back to the built-in providers with `ax provider gateway|codex|grok`. The full list (built-ins included) stays available under **Switch provider** in the same menu.
+
+### Built-in presets
+
+ax ships a curated catalog of well-known OpenAI-compatible endpoints. A preset that is not yet registered is copied into `~/.fx/providers.json` on first use, so there is no JSON to hand-write:
+
+```bash
+ax provider openrouter        # registers openrouter, then asks for its key
+ax provider deepseek          # registers deepseek
+ax provider ollama            # keyless local server; selected directly
+```
+
+Run `ax provider` with no arguments to list the built-ins, registered custom providers, and available presets; `ax provider <preset>` registers and activates. Presets also appear directly on the `/login` menu (no description until picked, then join the registered list) and in the **Switch provider** list. Display names such as OpenCode Go, OpenRouter, or Ollama come from the catalog; registered names that are not presets keep their own identifier. Available presets: `opencode-go`, `openrouter`, `groq`, `deepseek`, `ollama`, `together`, `mistral`, `cerebras`, `xai`, `gemini`, `perplexity`, and `moonshot`.
+
+Each preset registers a default `api_key_env` (for example `OPENROUTER_API_KEY`); export that variable or paste a key inline when prompted. Keyless presets such as `ollama` send no `Authorization` header at all. A registered preset is an ordinary entry in `providers.json` and stays editable there; presets are starting points, never hidden state.
+
+When a selected custom provider has no usable key, ax asks for one inline: the picker opens a masked entry field, and Enter saves the key into `~/.fx/providers.json` (removing any configured `api_key_env` so the stored key is authoritative) and completes the switch. Custom providers never touch the AI Gateway: the key goes directly to your endpoint, Fast mode is unavailable, and sensitive actions surface the direct permission prompt instead of an automatic review.
+
+This unlocks flat-rate subscriptions such as OpenCode Go, plus local and self-hosted servers (Ollama, vLLM, LM Studio) and aggregators (OpenRouter) that speak OpenAI Chat Completions.
+
 The status line hides the workspace path and Git branch by default. Enable the `Status line workspace` option in `/settings`, run `/statusline workspace`, or set it in `~/.fx/settings.json`:
 
 ```json

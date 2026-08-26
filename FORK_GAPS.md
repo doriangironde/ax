@@ -13,7 +13,10 @@ of this fork's history. Read it top to bottom before touching code.
   - `0da89d9` — rebrand: user-facing identity + binary rename `fx` → `ax`.
   - `cbc8db6` — skills-menu filter-label collision fix + TUI/e2e expectation
     alignment.
-- Working tree is clean. All subsequent work starts from here.
+- Working tree carries the uncommitted **custom-provider feature** (G10):
+  31 files changed, two new modules (`src/core/config/custom_providers.zig`,
+  `src/gateway/openai_compatible.zig`) and one new dev tool
+  (`scripts/local-mock-openai.py`). Commit as one logical feature.
 - The binary is `./zig-out/bin/ax`. **Always use this binary for
   verification.** Never run a `PATH`-installed `fx`.
 
@@ -48,6 +51,11 @@ Kept (internal/compat, do not rename casually):
 export PATH="$HOME/zig:$PATH"        # add to shell rc
 zig version                            # expect 0.16.0
 
+# When shelled through the DSH file sandbox, redirect Zig's GLOBAL cache into
+# the workspace: the sandbox denies writes to ~/.cache/zig, which fails every
+# build with manifest_create PermissionDenied.
+export ZIG_GLOBAL_CACHE_DIR="$PWD/.zig-global-cache"   # (gitignored)
+
 # TUI tests need tmux (3.7c installed via brew on this machine)
 tmux -V
 
@@ -80,7 +88,7 @@ pane = the process spawned and exited, i.e. wedge or early-exit, not a crash).
 
 | Suite | Command | Result |
 |---|---|---|
-| Zig unit | `zig build test` | 8442/8444, 2 skipped; 1 fail = pre-existing leak (below) |
+| Zig unit | `zig build test` | 8468/8476, 3 skipped; 5 fails = the sandbox-environment set (PTY/Keychain/raw-mode denials + pre-existing terminal leak + one rotating collateral victim; byte-identical on pristine code under the same sandbox). Includes the 25+ custom-provider tests. Unsandboxed shell shows the historical counts below. |
 | CLI e2e | `bun test cli.test.ts` | 112/112 |
 | e2e non-TUI | `bun test config-persistence.test.ts prompt-history.test.ts` | pass |
 | ACP + gateway | `bun test acp.test.ts ./gateway-stream-lifecycle.test.ts ./tmux-helpers.test.ts` | pass (last verified 298/0 across these + cli + persistence) |
@@ -203,6 +211,169 @@ the visible tab row (fuzzy filter in `src/ui/input` or skills completion in
 `"ax"` and update the three assertions above.
 
 **Verify:** `bun test tui-slash-menu.test.ts` must stay 38/38.
+
+### G10 — Custom providers (v1 complete; roadmap for v2)
+
+**What:** ax can now run against any OpenAI-compatible endpoint registered in
+`~/.fx/providers.json` (name, base_url, api_key or api_key_env, api_type,
+models with context_window/max_output_tokens/reasoning/vision/file_input).
+Wire: `POST <base_url>/chat/completions` with SSE parsing for content,
+reasoning_content, tool calls, usage, and finish reasons. No Gateway traffic:
+keys resolve from the registry (env ref wins, then inline), tracked as the
+`custom_provider` credential source.
+
+**User surfaces (v1):** `ax provider <name>` activates a registered provider
+(no catalog fetch; the model list is static from the file), `ax models` lists
+its models, `/model` and the model cache serve the static catalog, sessions
+and subagents carry the selection (`custom_provider` in settings.json and the
+session codec, optional keys, backward compatible), and resume/restore routes
+back through the same registry. Interactive: `/login` -> Switch provider lists
+every registered custom provider after the three builtins; selecting one
+activates it in place and marks it `current`. A custom provider without a
+usable key opens a masked inline key entry; Enter stores the key into
+`~/.fx/providers.json` (removing `api_key_env` so the stored key is
+authoritative) and completes the switch. Esc returns to the provider stage.
+Permissions: automatic review is disabled for custom providers; sensitive
+actions surface the direct prompt instead.
+
+**Inline key entry notes:** the typed key lives in the auth runtime's
+`api_key_input` buffer, is masked in the picker, and is zeroed after the save;
+`storeApiKey` (custom_providers.zig) rewrites providers.json atomically
+(tmp + rename, mode 0600) with the inline `api_key` and no env reference.
+The submit flow owns a copy of the provider name before stage teardown: the
+runtime's `clearRetainingCapacity` scribbles 0xaa over its buffers in Debug
+builds, so borrowed slices must not outlive it (the 2026-08-24 garbage-name
+regression was exactly this). The catalog provider returned by
+`App.customCatalogProviderForSelection` (and the ask context's twin) points
+its context at the owning app field: the model cache fetches on a worker
+thread, and a stack-local context segfaulted interactive startup
+(2026-08-24 SIGSEGV regression, pinned by a pointer-identity regression test
+in main.zig).
+
+**Implementations that deliberately punt (v2):**
+1. ACP sessions cannot route `.custom`; the server says
+   `AgentStreamProviderUnavailable` (same treatment as codex/grok in WASM).
+2. Only `openai-completions` api_type exists. `anthropic-messages` and
+   `openai-responses` are future enum values; unknown api_types are skipped at
+   registry load with the rest of the entry intact.
+3. No automatic permission reviewer on the custom route, no
+   `/v1/models` fetch (static catalog only), no auth header templating
+   beyond `Bearer <key>` (or no header at all for keyless entries).
+4. WASM hosts never carry custom routes.
+5. The `/login` stage refreshes the registry each time it opens, but
+   the app's lazily loaded in-memory registry is only re-read on restart; a
+   provider added to providers.json while ax runs appears in the picker
+   immediately and is activatable (the switch flow reads the file fresh), while
+   `/model` warmups for the new name start after the next launch. Preset
+   registration while running is the one caller that reloads the in-memory
+   registry immediately (`App.reloadCustomProviderRegistry`) so the freshly
+   registered entry is routable in the same session. Since 2026-08-25 the
+   `/login` root menu lists registered custom providers and unregistered
+   presets directly (after the built-in sign-in ways, before Switch provider);
+   the provider stage under Switch provider remains the full list with the
+   built-ins included and the active row marked. The root menu marks the
+   active provider row `current` (`openPickerWithActiveProvider`, fed by
+   `/login` and `/setup` with the runtime selection) while preset rows carry
+   no description; display rows use each preset's curated `label`
+   (e.g. OpenCode Go) through `auth_runtime.customProviderLabel`, so
+   registered names that match a preset are also shown under the label while
+   hand-registered names keep their own identifier.
+6. Preset model lists are static starting points, never live `/v1/models`
+   fetches; users edit providers.json for catalog drift.
+
+**Presets (2026-08-25):** `src/core/config/provider_presets.zig` ships 12
+curated OpenAI-compatible endpoints (opencode-go, openrouter, groq, deepseek,
+ollama, together, mistral, cerebras, xai, gemini, perplexity, moonshot) with
+curated display labels (OpenCode Go, OpenRouter, Groq, DeepSeek, Ollama,
+Together AI, Mistral, Cerebras, xAI, Gemini, Perplexity, Moonshot).
+Registration (`ax provider <preset>`, or a `.custom_provider_preset` picker
+row) merges the preset entry into providers.json inside one request arena,
+preserving every other entry verbatim; an absent file starts a fresh document
+and the parent `.fx` dir is created. `keyless: true` entries (only ollama in
+the catalog; manual entries may set it too) need no key: the transport omits
+the Authorization header (`Value.omit`) instead of failing with
+`OpenAICompatibleCredentialRequired`, `resolveForProviderWithCustom` returns
+an empty-token custom credential, the CLI activation check uses
+`Entry.usableKey()`, and the interactive switch skips the inline key picker.
+Keyless entries send no auth header and are only as safe as the endpoint
+(localhost default). Verified live 2026-08-25: `ax provider ollama` registers
+and selects with a fresh isolated HOME; `ax provider openrouter` registers
+and correctly demands `OPENROUTER_API_KEY`; `ax provider` lists all three
+classes; unit suite covers catalog invariants, merge, idempotence, malformed
+documents, keyless parsing, and the transport guard.
+
+**Registry details:** env override `FX_CUSTOM_PROVIDERS_PATH` (absolute path,
+test/diagnostic use); default `~/.fx/providers.json`. Registry validation is
+in `src/core/config/custom_providers.zig` (name charset `[a-z0-9-]`, no
+slashes; entries with unknown api_type, bad URLs, or no models are skipped).
+Transport in `src/gateway/openai_compatible.zig` mirrors
+`openai_codex.zig`'s bounded HTTP + SSE discipline. Static catalog adapter
+`staticCatalogProvider` feeds the model cache and picker.
+
+**Sweep note:** provider names travel as strings (`custom_provider` keys in
+settings/session JSON). Any future sweep that touches `"custom"` / the
+`custom_provider` key must keep binary and tests in agreement, and the
+`mcp-modern-stdio.mjs`-style conformance oracles do not involve this surface.
+
+**Wire contract (2026-08-24):** the tools array must keep the standard
+OpenAI nesting `{"type":"function","function":{"name",..., "parameters",...}}`.
+Flattened tool objects pass permissive servers (the local mock) but OpenCode Go
+rejects them with `tools[0]: missing field 'function'`; the transport unit test
+pins the nested shape. Verified live against opencode.ai after the fix: plain
+and tool-calling `ax ask` round trips (deepseek-v4-flash-vision-exp, stored
+inline key) complete end to end.
+
+**E2E verification (2026-08-24, this machine, sandboxed shell):** a local
+mock OpenAI-compatible server (`scripts/local-mock-openai.py`, run on
+127.0.0.1) was registered as `mock`, then driven with the freshly built
+`zig-out/bin/ax` under an isolated `HOME`:
+1. `ax provider mock` -> `Provider set to mock (custom).`; settings written
+   as `{"model":"helper","provider":"custom","custom_provider":"mock"}`.
+2. `ax models` lists the registered models; no Gateway copy shown for the
+   custom catalog.
+3. `ax ask "Just say hi"` streams `hello from helper` through the custom
+   SSE path and exits 0 after exactly one request.
+4. `ax ask "list the files in this directory"` drives the mock tool call
+   (`list_files`) through the real tool admission and execution path, then
+   continues for a second plain request; exits 0.
+5. `ax ask --resume last` continues the custom session on the same route.
+6. Interactive (tmux): `/login` -> Switch provider lists registered custom
+   names; selecting one with a key present persists
+   `{"provider":"custom","custom_provider":"<name>"}` and shows
+   `Switched to <name> (custom provider) with <model>.`; reopening the picker
+   marks the active name `current`; a subsequent typed prompt streams through
+   the custom transport inline.
+7. The real OpenCode Go registry entry (30 models from the live catalog) was
+   validated by `ax models` and by a dummy-key `ax ask` that reached
+   `https://opencode.ai/zen/go/v1` and returned HTTP 401.
+8. Interactive drives (tmux, isolated HOME, real registry): `/login` ->
+   Switch provider lists `opencode-go` after the builtins; selecting with the
+   missing key opens the masked key entry; typed key + Enter stores it inline
+   (providers.json rewritten atomically, `api_key_env` removed) and completes
+   the switch; reopening the picker marks the provider `current`.
+9. Live against opencode.ai with the stored inline key (flat-rate
+   subscription): `ax ask` plain and tool-calling round trips pass end to end
+   on `deepseek-v4-flash-vision-exp` after the tools[0].function fix (item
+   below). The user's real profile now selects the custom provider
+   (`provider=custom`, `custom_provider=opencode-go`) with the inline key on
+   this machine.
+10. Suite runs after every fix: 8468/8476, only the sandbox-environment set
+    failing (identical on pristine code); `zig fmt --check src/` clean;
+    Debug + wasm + napi builds compile.
+6. `zig build test`: all 23 new unit tests pass. The four failures that
+   remain (PTY output drains, terminal start leak, Keychain round trip,
+   enableRawMode queued input) reproduce identically on the pristine
+   pre-change tree and are sandbox artifacts: the sandbox denies PTY,
+   Keychain, and raw-mode termios access, and the Zig runner panic
+   `error logs detected` aborts co-running tests with "failed without
+   output". Run the suite in an unsandboxed shell to see the historical
+   counts (8442/8444, 1 pre-existing leak).
+7. `zig fmt --check src/` passes. The Debug binary, wasm-surface=core, and
+   napi-surface=core builds all compile.
+
+**Verify:** `zig build test` (unsandboxed shell), `ax provider <name>` with a
+local OpenAI-compatible server, `ax models`, and an `ax ask` round trip through
+the custom route.
 
 ### G9 — MCP/context wire identity must stay `fx` (regression fixed, keep)
 

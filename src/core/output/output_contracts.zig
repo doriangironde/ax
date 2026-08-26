@@ -750,10 +750,14 @@ pub const ModelListSnapshot = struct {
             .gateway => "gateway",
             .codex => model_provider.label(.codex),
             .grok => model_provider.label(.grok),
+            .custom => "custom provider",
         };
     }
 
     fn catalogExplanation(self: ModelListSnapshot) ?[]const u8 {
+        // Custom catalogs are static registry listings: there is no public or
+        // team-private split to explain.
+        if (self.provider == .custom) return null;
         if (!self.private_models_hidden) return null;
         const reason = self.public_only_reason orelse return "Using the public model catalog.";
         return switch (reason) {

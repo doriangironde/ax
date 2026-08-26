@@ -70,7 +70,7 @@ pub noinline fn composeAuthPickerRow(
         return composeSignInPickerRow(alloc, view.sign_in, view.sign_in_source, row_index, width);
     }
     if (view.stage == .api_key) {
-        return composeApiKeyPickerRow(alloc, view.api_key_mask_count, row_index, width);
+        return composeApiKeyPickerRow(alloc, view.api_key_mask_count, view.api_key_custom_provider, row_index, width);
     }
     if (view.stage == .root and view.include_skip) {
         return composeOnboardingPickerRow(alloc, view, row_index, row_count, width);
@@ -307,6 +307,7 @@ fn composeSignInPickerRow(
 fn composeApiKeyPickerRow(
     alloc: Allocator,
     mask_count: usize,
+    custom_provider: []const u8,
     row_index: u16,
     width: u16,
 ) !std.ArrayList(u8) {
@@ -319,7 +320,18 @@ fn composeApiKeyPickerRow(
     else
         ui_render.dim_style);
     switch (row_index) {
-        0 => try row_text.appendClipped(alloc, &row, "   Paste your AI Gateway API key", width),
+        0 => {
+            var heading_buf: [160]u8 = undefined;
+            const heading = if (custom_provider.len > 0)
+                std.fmt.bufPrint(
+                    &heading_buf,
+                    "   Paste the {s} API key",
+                    .{auth_runtime.customProviderLabel(custom_provider)},
+                ) catch "   Paste the API key"
+            else
+                "   Paste your AI Gateway API key";
+            try row_text.appendClipped(alloc, &row, heading, width);
+        },
         1 => {
             try row_text.appendClipped(alloc, &row, "   ┃ ", width);
             if (mask_count == 0) {
@@ -332,11 +344,14 @@ fn composeApiKeyPickerRow(
         2 => try row_text.appendClipped(alloc, &row, "   Enter saves · Esc cancels", width),
         3 => {
             var label_buf: [128]u8 = undefined;
-            const label = std.fmt.bufPrint(
-                &label_buf,
-                "   Saves to {s}",
-                .{credentials.stored_key_backend_label},
-            ) catch "   Saves to configured credential store";
+            const label = if (custom_provider.len > 0)
+                "   Saves to ~/.fx/providers.json"
+            else
+                std.fmt.bufPrint(
+                    &label_buf,
+                    "   Saves to {s}",
+                    .{credentials.stored_key_backend_label},
+                ) catch "   Saves to configured credential store";
             try row_text.appendClipped(alloc, &row, label, width);
         },
         else => {},
@@ -1012,6 +1027,21 @@ const picker_test_slash_specs = [_]command_specs.SlashSpec{
     .{ .kind = .credits, .command = "/credits", .aliases = &.{"/balance"}, .help_entry = "/credits (/balance)", .completion_description = "show gateway credits balance", .presentation_category = .account },
 };
 const picker_test_slash_registry = command_specs.SlashRegistry{ .commands = picker_test_slash_specs[0..] };
+
+test "auth picker api key stage heads the custom provider name" {
+    const alloc = std.testing.allocator;
+    var heading = try composeApiKeyPickerRow(alloc, 4, "opencode-go", 0, 80);
+    defer heading.deinit(alloc);
+    try std.testing.expect(std.mem.find(u8, heading.items, "Paste the OpenCode Go API key") != null);
+
+    var save_line = try composeApiKeyPickerRow(alloc, 4, "opencode-go", 3, 80);
+    defer save_line.deinit(alloc);
+    try std.testing.expect(std.mem.find(u8, save_line.items, "Saves to ~/.fx/providers.json") != null);
+
+    var generic = try composeApiKeyPickerRow(alloc, 4, "", 0, 80);
+    defer generic.deinit(alloc);
+    try std.testing.expect(std.mem.find(u8, generic.items, "Paste your AI Gateway API key") != null);
+}
 
 test "footer composes slash completions as vertical described rows" {
     const alloc = std.testing.allocator;

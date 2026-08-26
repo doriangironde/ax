@@ -339,6 +339,7 @@ pub const ResumeHandoff = struct {
 pub const SessionPreferencePatch = struct {
     provider: ?model_provider.ProviderId = null,
     model: ?[]const u8 = null,
+    custom_provider: ?[]const u8 = null,
     effort: ?types.ReasoningEffort = null,
     fast_mode: ?bool = null,
 
@@ -353,6 +354,10 @@ pub const SessionPreferencePatch = struct {
                 .gateway => patch.model = self.model,
                 .codex => patch.codex_model = self.model,
                 .grok => patch.grok_model = self.model,
+                .custom => {
+                    patch.model = self.model;
+                    patch.custom_provider = self.custom_provider;
+                },
             }
         } else {
             patch.model = self.model;
@@ -1336,12 +1341,14 @@ pub fn Runtime(comptime App: type) type {
             effort: types.ReasoningEffort,
             fast_mode: bool,
         ) !void {
+            const current_custom = provider_runtime.customProvider(app);
             try replacePreferences(
                 app.alloc,
                 &app.session_persistence.workspace_preferences,
                 .{
                     .provider = provider,
                     .model = @constCast(configured_model),
+                    .custom_provider = if (provider == .custom) @constCast(current_custom) else null,
                     .effort = effort,
                     .fast_mode = fast_mode,
                 },
@@ -4896,7 +4903,19 @@ pub fn Runtime(comptime App: type) type {
             app: *App,
             preferences: session_codec.DurableSessionPreferences,
         ) !void {
-            try provider_runtime.replaceSelection(app, preferences.provider, preferences.model);
+            if (preferences.provider == .custom) {
+                try provider_runtime.replaceSelectionWithCustom(
+                    app,
+                    preferences.provider,
+                    preferences.model,
+                    preferences.custom_provider orelse "",
+                );
+            } else {
+                try provider_runtime.replaceSelection(app, preferences.provider, preferences.model);
+            }
+            if (comptime @hasDecl(App, "refreshCustomProviderState")) {
+                app.refreshCustomProviderState();
+            }
             if (app.session_persistence.process_model_override) |model| {
                 try provider_runtime.replaceModel(app, model);
             }
@@ -4975,6 +4994,16 @@ fn applyPreferencePatch(
         const replacement = try alloc.dupe(u8, model);
         alloc.free(current.model);
         current.model = replacement;
+    }
+    if (patch.custom_provider) |name| {
+        const replacement = try alloc.dupe(u8, name);
+        if (current.custom_provider) |existing| alloc.free(existing);
+        current.custom_provider = replacement;
+    } else if (patch.provider != null and patch.provider.? != .custom) {
+        if (current.custom_provider) |existing| {
+            alloc.free(existing);
+            current.custom_provider = null;
+        }
     }
     if (patch.effort) |effort| current.effort = effort;
     if (patch.fast_mode) |fast_mode| current.fast_mode = fast_mode;

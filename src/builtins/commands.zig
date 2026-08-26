@@ -1,5 +1,6 @@
 const std = @import("std");
 const command_specs = @import("../core/slash_commands/command_specs.zig");
+const provider_presets = @import("../core/config/provider_presets.zig");
 
 const Allocator = std.mem.Allocator;
 
@@ -137,8 +138,18 @@ pub const top_level_specs = [_]TopLevelSpec{
     .{
         .kind = .provider,
         .token = "provider",
-        .usage = "provider <gateway|codex|grok>",
+        .usage = "provider [<gateway|codex|grok|custom-name>]",
         .summary = "Choose the model provider used by ax",
+        .details = &.{
+            "With no arguments, lists built-in providers, registered custom providers,",
+            "and built-in presets.",
+            "",
+            "Custom providers live in ~/.fx/providers.json. A preset name that is not",
+            "registered yet is copied from the binary's preset catalog into that file",
+            "on selection, then activated like any registered provider.",
+            "Available presets:",
+            "  " ++ provider_presets.names_line,
+        },
     },
     .{
         .kind = .doctor,
@@ -294,7 +305,7 @@ pub const top_level_help_groups = [_]TopLevelHelpGroup{
     .{ .entries = &.{
         .{ .kind = .login, .usage = "login [vercel|codex|grok]" },
         .{ .kind = .logout, .usage = "logout [vercel|codex|grok]" },
-        .{ .kind = .provider, .usage = "provider <gateway|codex|grok>" },
+        .{ .kind = .provider, .usage = "provider <gateway|codex|grok|custom-name>" },
         .{ .kind = .setup, .usage = "setup" },
         .{ .kind = .teams, .usage = "teams" },
         .{ .kind = .credits, .usage = "credits|balance" },

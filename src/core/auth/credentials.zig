@@ -44,6 +44,7 @@ pub const CatalogAuthenticatedSource = enum {
     stored_key,
     chatgpt_subscription,
     grok_subscription,
+    custom_provider,
 
     fn credentialSource(self: CatalogAuthenticatedSource) Source {
         return switch (self) {
@@ -53,6 +54,7 @@ pub const CatalogAuthenticatedSource = enum {
             .stored_key => .stored_key,
             .chatgpt_subscription => .chatgpt_subscription,
             .grok_subscription => .grok_subscription,
+            .custom_provider => .custom_provider,
         };
     }
 };
@@ -91,7 +93,7 @@ pub const CatalogAccess = union(enum) {
     pub fn publicFallbackAfterRejection(self: CatalogAccess) ?CatalogAccess {
         return switch (self) {
             .public_only => null,
-            .authenticated => |access| if (access.source == .chatgpt_subscription or access.source == .grok_subscription)
+            .authenticated => |access| if (access.source == .chatgpt_subscription or access.source == .grok_subscription or access.source == .custom_provider)
                 null
             else
                 .{
@@ -168,6 +170,7 @@ pub fn catalogAccessForCredentialAndAccount(
         .stored_key => .stored_key,
         .chatgpt_subscription => .chatgpt_subscription,
         .grok_subscription => .grok_subscription,
+        .custom_provider => .custom_provider,
         .fx_login => blk: {
             const team = team_context orelse
                 return .{ .public_only = .fx_login_team_required };
@@ -180,7 +183,7 @@ pub fn catalogAccessForCredentialAndAccount(
         .authenticated = .{
             .source = authenticated_source,
             .credential = credential,
-            .team_context = if (authenticated_source == .chatgpt_subscription or authenticated_source == .grok_subscription) null else team_context,
+            .team_context = if (authenticated_source == .chatgpt_subscription or authenticated_source == .grok_subscription or authenticated_source == .custom_provider) null else team_context,
             .account_id = if (authenticated_source == .grok_subscription) account_id else null,
         },
     };
@@ -276,6 +279,28 @@ pub fn resolveForProvider(
     provider: model_provider.ProviderId,
     preferred: ?Source,
 ) !Resolution {
+    return resolveForProviderWithCustom(
+        alloc,
+        transport,
+        secret_store,
+        mode,
+        provider,
+        preferred,
+        null,
+    );
+}
+
+/// Resolves credentials for the selected provider. `custom_provider` names the
+/// registered custom provider entry and is required when `provider == .custom`.
+pub fn resolveForProviderWithCustom(
+    alloc: std.mem.Allocator,
+    transport: oauth_transport.Provider,
+    secret_store: host.SecretStore,
+    mode: LoadMode,
+    provider: model_provider.ProviderId,
+    preferred: ?Source,
+    custom_provider: ?[]const u8,
+) !Resolution {
     switch (provider) {
         .codex => {
             const credential = switch (mode) {
@@ -290,6 +315,27 @@ pub fn resolveForProvider(
                 .refresh_if_needed => try loadGrokCredential(alloc, transport, .if_needed),
             };
             return .{ .credential = credential };
+        },
+        .custom => {
+            const name = custom_provider orelse return .{};
+            const custom = @import("../config/custom_providers.zig");
+            const home = io_mod.getenv("HOME") orelse return .{};
+            var registry = custom.load(alloc, home) catch return .{};
+            defer registry.deinit(alloc);
+            const entry = registry.find(name) orelse return .{};
+            const key = try custom.resolveApiKey(alloc, entry) orelse {
+                // A keyless provider (for example a local Ollama server) is
+                // usable without any token; the transport sends no auth header.
+                if (entry.keyless) return .{ .credential = .{
+                    .token = &.{},
+                    .source = .custom_provider,
+                } };
+                return .{};
+            };
+            return .{ .credential = .{
+                .token = key,
+                .source = .custom_provider,
+            } };
         },
         .gateway => {},
     }
@@ -405,6 +451,9 @@ pub fn loadSource(
         .stored_key => loadStoredKeyCredential(alloc, secret_store),
         .chatgpt_subscription => loadChatGptCredential(alloc, transport, .if_needed),
         .grok_subscription => loadGrokCredential(alloc, transport, .if_needed),
+        // The custom key cannot be resolved without the registered provider
+        // name; `resolveForProviderWithCustom` is the only entry point.
+        .custom_provider => null,
     };
 }
 
@@ -430,6 +479,7 @@ pub fn sourceExists(
         },
         .chatgpt_subscription => chatgpt_oauth.sourceExists(alloc),
         .grok_subscription => grok_oauth.sourceExists(alloc),
+        .custom_provider => false,
         .stored_key => blk: {
             if (secret_store.isDisabled()) break :blk false;
             const stored = secret_store.load(alloc) catch |err| switch (err) {
@@ -656,6 +706,7 @@ pub fn sourceLabel(source: Source) []const u8 {
         .stored_key => "stored API key (" ++ stored_key_backend_label ++ ")",
         .chatgpt_subscription => "Codex subscription",
         .grok_subscription => "Grok subscription",
+        .custom_provider => "custom provider API key",
     };
 }
 

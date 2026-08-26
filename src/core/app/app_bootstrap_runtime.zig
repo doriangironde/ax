@@ -267,7 +267,10 @@ pub fn Runtime(comptime App: type) type {
             var selected_model = startup.takeSelectedModel();
             defer if (selected_model.len > 0) app.alloc.free(selected_model);
             if (comptime @hasField(App, "provider_selection")) {
-                app.provider_selection.adoptOwned(startup.provider, &selected_model);
+                app.provider_selection.adoptOwned(startup.provider, &selected_model, startup.custom_provider);
+                if (comptime @hasDecl(App, "refreshCustomProviderState")) {
+                    app.refreshCustomProviderState();
+                }
             } else {
                 try provider_runtime.replaceModel(app, selected_model);
             }

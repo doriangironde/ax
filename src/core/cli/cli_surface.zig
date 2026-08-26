@@ -14,6 +14,8 @@ const collections = @import("../shared/collections.zig");
 const config_runtime = @import("../config/config_runtime.zig");
 const credentials = @import("../auth/credentials.zig");
 const model_provider = @import("../config/model_provider.zig");
+const custom_providers = @import("../config/custom_providers.zig");
+const provider_presets = @import("../config/provider_presets.zig");
 const debug_trace = @import("../shared/debug_trace.zig");
 const doctor_runtime = @import("doctor_runtime.zig");
 const gateway_provider = @import("../gateway/gateway_provider.zig");
@@ -694,6 +696,7 @@ fn activateProviderSelection(
             .gateway => "Gateway is already selected.\n",
             .codex => "Codex is already selected.\n",
             .grok => "Grok is already selected.\n",
+            .custom => unreachable,
         });
         return true;
     }
@@ -741,6 +744,7 @@ fn activateProviderSelection(
                 .codex => "Codex credential is unavailable",
                 .grok => "Grok credential is unavailable",
                 .gateway => "configure a Gateway credential first",
+                .custom => unreachable,
             },
         );
         return false;
@@ -755,6 +759,7 @@ fn activateProviderSelection(
             return false;
         },
         .gateway => cfg.gateway_provider.model_catalog,
+        .custom => unreachable,
     };
     const fetch_result = model_catalog.fetchWithPublicFallback(catalog_provider, alloc, .{
         .access = credentials.catalogAccessAt(credential.*, io_mod.milliTimestamp()),
@@ -780,6 +785,7 @@ fn activateProviderSelection(
         .gateway => settings.model,
         .codex => settings.codex_model,
         .grok => settings.grok_model,
+        .custom => unreachable,
     };
     const selected_model = selectCatalogModel(loaded.catalog.items, saved_model) orelse {
         try writeProviderActivationError(alloc, deps, caller, "target model catalog is empty");
@@ -789,6 +795,7 @@ fn activateProviderSelection(
         .gateway => .{ .provider = target, .model = selected_model },
         .codex => .{ .provider = target, .codex_model = selected_model },
         .grok => .{ .provider = target, .grok_model = selected_model },
+        .custom => unreachable,
     });
     defer attempt.deinit(alloc);
     switch (attempt) {
@@ -802,17 +809,267 @@ fn activateProviderSelection(
     if (performed_login) |provider| switch (provider) {
         .codex => try writeStdout(deps, "Signed in with Codex.\n"),
         .grok => try writeStdout(deps, "Signed in with Grok.\n"),
-        .gateway => unreachable,
+        .gateway, .custom => unreachable,
     };
     if (caller == .provider_command) {
         try writeStdout(deps, switch (target) {
             .gateway => "Provider set to Gateway.\n",
             .codex => "Provider set to Codex.\n",
             .grok => "Provider set to Grok.\n",
+            .custom => unreachable,
         });
     }
     return true;
 }
+
+/// Lists the built-in providers, registered custom providers, and built-in
+/// presets available for registration. Backs `ax provider` with no arguments.
+fn listProviders(alloc: Allocator, deps: RunDeps) !bool {
+    try writeStdout(deps, "Built-in providers: gateway, codex, grok\n");
+    var registered: std.ArrayList([]u8) = .empty;
+    defer {
+        for (registered.items) |name| alloc.free(name);
+        registered.deinit(alloc);
+    }
+    if (deps.getenv(deps.env_ctx, "HOME")) |home| {
+        var registry = custom_providers.load(alloc, home) catch null;
+        defer if (registry) |*value| value.deinit(alloc);
+        if (registry) |*value| {
+            for (value.entries.items) |*entry| {
+                const owned = alloc.dupe(u8, entry.name) catch break;
+                registered.append(alloc, owned) catch {
+                    alloc.free(owned);
+                    break;
+                };
+            }
+        }
+    }
+    if (registered.items.len > 0) {
+        var first = true;
+        var line: std.ArrayList(u8) = .empty;
+        defer line.deinit(alloc);
+        try line.appendSlice(alloc, "Registered custom providers (providers.json): ");
+        for (registered.items) |name| {
+            if (!first) try line.appendSlice(alloc, ", ");
+            first = false;
+            try line.appendSlice(alloc, name);
+        }
+        try line.append(alloc, '\n');
+        try writeStdout(deps, line.items);
+    } else {
+        try writeStdout(deps, "Registered custom providers (providers.json): none\n");
+    }
+    const line = try std.fmt.allocPrint(
+        alloc,
+        "Built-in presets (register on selection with `ax provider <name>`): {s}\n",
+        .{provider_presets.names_line},
+    );
+    defer alloc.free(line);
+    try writeStdout(deps, line);
+    return true;
+}
+
+/// Ensures a custom provider name is registered before activation: a built-in
+/// preset that is not yet in providers.json is registered on first use.
+/// Returns false (and writes the failure) when the name is neither registered
+/// nor a preset.
+fn ensureCustomProviderRegistered(
+    alloc: Allocator,
+    deps: RunDeps,
+    name: []const u8,
+) !bool {
+    if (!custom_providers.validName(name)) {
+        try writeProviderActivationError(alloc, deps, .provider_command, "invalid custom provider name");
+        return false;
+    }
+    const home = deps.getenv(deps.env_ctx, "HOME") orelse {
+        try writeProviderActivationError(alloc, deps, .provider_command, "HOME is not set");
+        return false;
+    };
+    var registry = custom_providers.load(alloc, home) catch |err| {
+        debug_trace.logf("config", "custom provider registry load failed err={s}", .{@errorName(err)});
+        try writeProviderActivationError(alloc, deps, .provider_command, "could not read providers.json");
+        return false;
+    };
+    defer registry.deinit(alloc);
+    if (registry.find(name) != null) return true;
+
+    const preset = provider_presets.presetNamed(name) orelse {
+        const detail = try std.fmt.allocPrint(
+            alloc,
+            "no custom provider named '{s}' in providers.json",
+            .{name},
+        );
+        defer alloc.free(detail);
+        try writeProviderActivationError(alloc, deps, .provider_command, detail);
+        return false;
+    };
+    const registration = provider_presets.registerPreset(alloc, home, preset) catch |err| {
+        debug_trace.logf("config", "preset registration failed name={s} err={s}", .{ name, @errorName(err) });
+        const detail = try std.fmt.allocPrint(
+            alloc,
+            "could not register the '{s}' preset in providers.json",
+            .{name},
+        );
+        defer alloc.free(detail);
+        try writeProviderActivationError(alloc, deps, .provider_command, detail);
+        return false;
+    };
+    switch (registration) {
+        .registered => {
+            const message = try std.fmt.allocPrint(
+                alloc,
+                "Registered {s} from built-in presets in providers.json.\n",
+                .{name},
+            );
+            defer alloc.free(message);
+            try writeStdout(deps, message);
+        },
+        .already_present => {},
+    }
+    return true;
+}
+
+/// Activates a registered custom provider by name. No network catalog fetch:
+/// the model list comes from providers.json.
+fn activateCustomProviderSelection(
+    alloc: Allocator,
+    deps: RunDeps,
+    name: []const u8,
+) !bool {
+    if (!custom_providers.validName(name)) {
+        try writeProviderActivationError(alloc, deps, .provider_command, "invalid custom provider name");
+        return false;
+    }
+    const home = deps.getenv(deps.env_ctx, "HOME") orelse {
+        try writeProviderActivationError(alloc, deps, .provider_command, "HOME is not set");
+        return false;
+    };
+    var registry = custom_providers.load(alloc, home) catch |err| {
+        debug_trace.logf("config", "custom provider registry load failed err={s}", .{@errorName(err)});
+        try writeProviderActivationError(alloc, deps, .provider_command, "could not read providers.json");
+        return false;
+    };
+    defer registry.deinit(alloc);
+    const entry = registry.find(name) orelse {
+        const detail = try std.fmt.allocPrint(
+            alloc,
+            "no custom provider named '{s}' in providers.json",
+            .{name},
+        );
+        defer alloc.free(detail);
+        try writeProviderActivationError(alloc, deps, .provider_command, detail);
+        return false;
+    };
+    if (!entry.usableKey()) {
+        const detail = try std.fmt.allocPrint(
+            alloc,
+            "custom provider '{s}' needs an API key: set api_key_env in providers.json or export its value",
+            .{name},
+        );
+        defer alloc.free(detail);
+        try writeProviderActivationError(alloc, deps, .provider_command, detail);
+        return false;
+    }
+    const model_id = entry.defaultModelId() orelse {
+        const detail = try std.fmt.allocPrint(
+            alloc,
+            "custom provider '{s}' exposes no models in providers.json",
+            .{name},
+        );
+        defer alloc.free(detail);
+        try writeProviderActivationError(alloc, deps, .provider_command, detail);
+        return false;
+    };
+
+    const workspace_root = try io_mod.realpathAlloc(alloc, ".");
+    defer alloc.free(workspace_root);
+    var settings = config_runtime.loadMergedSettings(alloc, workspace_root) catch |err| {
+        try writeProviderActivationError(alloc, deps, .provider_command, "could not load settings");
+        debug_trace.logf("config", "provider selection settings load failed err={s}", .{@errorName(err)});
+        return false;
+    };
+    defer settings.deinit(alloc);
+
+    const already_selected = (settings.provider orelse .gateway) == .custom and
+        if (settings.custom_provider) |selected|
+            std.mem.eql(u8, selected, name)
+        else
+            false;
+    if (already_selected) {
+        try writeStdout(deps, "Custom provider is already selected.\n");
+        return true;
+    }
+
+    var attempt = config_runtime.attemptUserPreferences(alloc, .{
+        .provider = .custom,
+        .model = model_id,
+        .custom_provider = name,
+    });
+    defer attempt.deinit(alloc);
+    switch (attempt) {
+        .failure => |failure| {
+            debug_trace.logf("config", "provider selection persistence failed err={s}", .{@errorName(failure.err)});
+            try writeProviderActivationError(alloc, deps, .provider_command, "failed to save provider selection");
+            return false;
+        },
+        .outcome => {},
+    }
+    const message = try std.fmt.allocPrint(alloc, "Provider set to {s} (custom).\n", .{name});
+    defer alloc.free(message);
+    try writeStdout(deps, message);
+    return true;
+}
+
+const CustomCliCatalogContext = struct {
+    registry: custom_providers.Registry = .{},
+    provider_name: []u8 = &.{},
+    alloc: Allocator,
+
+    fn deinit(self: *CustomCliCatalogContext, alloc: Allocator) void {
+        self.registry.deinit(alloc);
+        if (self.provider_name.len > 0) alloc.free(self.provider_name);
+        alloc.destroy(self);
+    }
+};
+
+fn fetchCustomCliModelCatalog(
+    raw: ?*anyopaque,
+    alloc: Allocator,
+    input: gateway_provider.CliModelCatalogInput,
+) gateway_provider.CliModelCatalogResult {
+    const context: *CustomCliCatalogContext = @ptrCast(@alignCast(raw.?));
+    const entry = context.registry.find(context.provider_name) orelse
+        return .{ .failure = .{
+            .access = gateway_model_catalog.AccessMetadata.init(input.access),
+            .anonymous_fallback_used = false,
+            .failure = .{ .category = .runtime },
+        } };
+    var ids: std.ArrayList([]u8) = .empty;
+    errdefer collections.freeStringList(alloc, &ids);
+    ids.ensureTotalCapacity(alloc, entry.models.items.len) catch return .{ .failure = .{
+        .access = gateway_model_catalog.AccessMetadata.init(input.access),
+        .anonymous_fallback_used = false,
+        .failure = .{ .category = .resource_exhausted },
+    } };
+    for (entry.models.items) |*model| {
+        ids.append(alloc, alloc.dupe(u8, model.id) catch return .{ .failure = .{
+            .access = gateway_model_catalog.AccessMetadata.init(input.access),
+            .anonymous_fallback_used = false,
+            .failure = .{ .category = .resource_exhausted },
+        } }) catch return .{ .failure = .{
+            .access = gateway_model_catalog.AccessMetadata.init(input.access),
+            .anonymous_fallback_used = false,
+            .failure = .{ .category = .resource_exhausted },
+        } };
+    }
+    return .{ .loaded = .{
+        .ids = ids,
+        .provenance = .{ .access = gateway_model_catalog.AccessMetadata.init(input.access) },
+    } };
+}
+
+const gateway_model_catalog = @import("../gateway/model_catalog.zig");
 
 fn runIfRequestedWithDeps(alloc: Allocator, args: []const [:0]const u8, cfg: Config, deps: RunDeps) !RunResult {
     const parsed_launch = parseInteractiveLaunch(alloc, args, cfg.command_catalog) catch |err| {
@@ -1080,18 +1337,29 @@ fn runNonInteractiveWithDeps(
             return .handled_success;
         },
         .provider => |rest| {
-            if (rest.len != 1) {
-                try writeStderr(deps, "usage: ax provider <gateway|codex|grok>\n");
+            if (rest.len > 1) {
+                try writeStderr(deps, "usage: ax provider <gateway|codex|grok|custom-name>\n");
                 return .handled_failure;
             }
-            const target = model_provider.parse(rest[0]) orelse {
-                try writeStderr(deps, "ax provider: expected gateway, codex, or grok\n");
-                return .handled_failure;
-            };
-            return if (try activateProviderSelection(alloc, cfg, deps, target, .provider_command))
-                .handled_success
-            else
-                .handled_failure;
+            if (rest.len == 0) {
+                return if (try listProviders(alloc, deps)) .handled_success else .handled_failure;
+            }
+            if (model_provider.parse(rest[0])) |target| {
+                return if (try activateProviderSelection(alloc, cfg, deps, target, .provider_command))
+                    .handled_success
+                else
+                    .handled_failure;
+            }
+            // A name that is not a builtin provider must be a registered
+            // custom provider from providers.json, or a built-in preset that
+            // is registered on first selection.
+            if (try ensureCustomProviderRegistered(alloc, deps, rest[0])) {
+                return if (try activateCustomProviderSelection(alloc, deps, rest[0]))
+                    .handled_success
+                else
+                    .handled_failure;
+            }
+            return .handled_failure;
         },
         .setup => |rest| {
             if (rest.len != 0) {
@@ -1168,6 +1436,8 @@ fn runNonInteractiveWithDeps(
             try writeConfigDiagnostics(alloc, deps, startup.config_diagnostics);
 
             const catalog_access = startup.modelCatalogAccess();
+            var custom_catalog_cleanup: ?*CustomCliCatalogContext = null;
+            defer if (custom_catalog_cleanup) |ctx| ctx.deinit(alloc);
             const catalog_provider = switch (startup.provider) {
                 .codex => cfg.codex_cli_model_catalog orelse {
                     try writeStderr(deps, "ax models: Codex model catalog is unavailable\n");
@@ -1178,6 +1448,32 @@ fn runNonInteractiveWithDeps(
                     return .handled_failure;
                 },
                 .gateway => cfg.gateway_provider.cli_model_catalog,
+                .custom => blk: {
+                    const home = io_mod.getenv("HOME") orelse {
+                        try writeStderr(deps, "ax models: HOME is not set\n");
+                        return .handled_failure;
+                    };
+                    if (startup.custom_provider.len == 0) {
+                        try writeStderr(deps, "ax models: no custom provider is selected\n");
+                        return .handled_failure;
+                    }
+                    const registry = custom_providers.load(alloc, home) catch {
+                        try writeStderr(deps, "ax models: could not read providers.json\n");
+                        return .handled_failure;
+                    };
+                    const context = try alloc.create(CustomCliCatalogContext);
+                    errdefer alloc.destroy(context);
+                    context.* = .{
+                        .registry = registry,
+                        .provider_name = try alloc.dupe(u8, startup.custom_provider),
+                        .alloc = alloc,
+                    };
+                    custom_catalog_cleanup = context;
+                    break :blk gateway_provider.CliModelCatalogProvider{
+                        .context = context,
+                        .fetch_fn = fetchCustomCliModelCatalog,
+                    };
+                },
             };
             const loaded = switch (catalog_provider.fetch(alloc, .{
                 .access = catalog_access,

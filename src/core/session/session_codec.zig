@@ -12,11 +12,14 @@ const Sha256 = std.crypto.hash.sha2.Sha256;
 pub const DurableSessionPreferences = struct {
     provider: model_provider.ProviderId = .gateway,
     model: []u8,
+    /// Registered custom provider name; set only while `provider == .custom`.
+    custom_provider: ?[]u8 = null,
     effort: types.ReasoningEffort,
     fast_mode: bool,
 
     pub fn deinit(self: *DurableSessionPreferences, alloc: Allocator) void {
         alloc.free(self.model);
+        if (self.custom_provider) |value| alloc.free(value);
         self.* = undefined;
     }
 
@@ -24,6 +27,10 @@ pub const DurableSessionPreferences = struct {
         return .{
             .provider = self.provider,
             .model = try alloc.dupe(u8, self.model),
+            .custom_provider = if (self.custom_provider) |value|
+                try alloc.dupe(u8, value)
+            else
+                null,
             .effort = self.effort,
             .fast_mode = self.fast_mode,
         };
@@ -589,6 +596,10 @@ fn writeState(writer: *std.Io.Writer, state: DurableSessionState) !void {
         if (state.preferences.fast_mode) "true" else "false",
     });
     try writeJsonString(writer, @tagName(state.preferences.provider));
+    if (state.preferences.custom_provider) |custom_name| {
+        try writer.writeAll(",\"custom_provider\":");
+        try writeJsonString(writer, custom_name);
+    }
     try writer.writeAll("},\"history\":[");
     for (state.history, 0..) |turn, i| {
         if (i > 0) try writer.writeByte(',');
@@ -785,6 +796,13 @@ fn decodeStateImpl(alloc: Allocator, source: *std.Io.Reader, limits: DecodeLimit
         defer alloc.free(provider_raw);
         provider = model_provider.parse(provider_raw) orelse return error.InvalidDurableField;
     }
+    var custom_provider: ?[]u8 = null;
+    if (try json_reader.peekNextTokenType() != .object_end) {
+        try expectKey(&json_reader, alloc, "custom_provider");
+        custom_provider = try readStringOwned(&json_reader, alloc, 128);
+        errdefer if (custom_provider) |value| alloc.free(value);
+        if (provider != .custom) return error.InvalidDurableField;
+    }
     try expectToken(try json_reader.next(), .object_end);
 
     try expectKey(&json_reader, alloc, "history");
@@ -895,6 +913,7 @@ fn decodeStateImpl(alloc: Allocator, source: *std.Io.Reader, limits: DecodeLimit
         .preferences = .{
             .provider = provider,
             .model = model,
+            .custom_provider = custom_provider,
             .effort = effort,
             .fast_mode = fast_mode,
         },

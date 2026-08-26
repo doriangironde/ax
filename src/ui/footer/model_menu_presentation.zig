@@ -357,6 +357,7 @@ fn loadedCatalogStatusText(state: model_cache_runtime.ModelMenuCatalogState) ?[]
             .stored_key => "Gateway catalog: authenticated with the stored API key.",
             .chatgpt_subscription => "Codex catalog: authenticated with a subscription.",
             .grok_subscription => "Grok catalog: authenticated with a subscription.",
+            .custom_provider => "Custom provider catalog: configured from providers.json.",
         };
     }
     return null;

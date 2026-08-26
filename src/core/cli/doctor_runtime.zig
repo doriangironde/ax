@@ -127,6 +127,8 @@ pub fn collect(
             .gateway => detailed.settings.model,
             .codex => detailed.settings.codex_model,
             .grok => detailed.settings.grok_model,
+            // The selected custom model lives in the shared model slot.
+            .custom => detailed.settings.model,
         },
         .permission_mode = detailed.settings.permission_mode,
         .max_agent_steps = detailed.settings.max_agent_steps,

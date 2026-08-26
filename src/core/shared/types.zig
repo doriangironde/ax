@@ -94,6 +94,9 @@ pub const CredentialSource = enum {
     stored_key,
     chatgpt_subscription,
     grok_subscription,
+    /// API key for a custom provider registered in `~/.fx/providers.json`.
+    /// The key itself never enters session state; only this marker does.
+    custom_provider,
 };
 
 pub fn parseCredentialSource(text: []const u8) ?CredentialSource {

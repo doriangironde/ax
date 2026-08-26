@@ -1,10 +1,13 @@
 const std = @import("std");
 const config_runtime = @import("../config/config_runtime.zig");
+const custom_providers = @import("../config/custom_providers.zig");
+const provider_presets = @import("../config/provider_presets.zig");
 const debug_trace = @import("../shared/debug_trace.zig");
 const host = @import("../hosts/host.zig");
 const runtime_profile = @import("../hosts/runtime_profile.zig");
 const host_target = @import("../hosts/target.zig");
 const io_mod = @import("../shared/io.zig");
+const secret = @import("../auth/secret.zig");
 const credentials = @import("../auth/credentials.zig");
 const auth_runtime = @import("../auth/auth_runtime.zig");
 const login_flow = @import("../auth/login_flow.zig");
@@ -80,6 +83,7 @@ pub fn Runtime(comptime App: type) type {
                     .codex => .chatgpt_subscription,
                     .grok => .grok_subscription,
                     .gateway => app.auth.credentialSource() orelse .fx_login,
+                    .custom => .custom_provider,
                 };
                 const route_change = app.auth.selectForProvider(app.alloc, provider) catch |err| switch (err) {
                     error.OutOfMemory => return err,
@@ -133,7 +137,15 @@ pub fn Runtime(comptime App: type) type {
                 return;
             }
             try app.auth.refreshSourceInventory(app.alloc);
-            app.auth.openPicker(app.alloc);
+            if (comptime provider_runtime.supported(App)) {
+                app.auth.openPickerWithActiveProvider(
+                    app.alloc,
+                    provider_runtime.provider(app),
+                    provider_runtime.customProvider(app),
+                );
+            } else {
+                app.auth.openPicker(app.alloc);
+            }
             app.shell.render_requests.request(.footer);
         }
 
@@ -260,7 +272,15 @@ pub fn Runtime(comptime App: type) type {
                 return;
             }
             try app.auth.refreshSourceInventory(app.alloc);
-            app.auth.openPicker(app.alloc);
+            if (comptime provider_runtime.supported(App)) {
+                app.auth.openPickerWithActiveProvider(
+                    app.alloc,
+                    provider_runtime.provider(app),
+                    provider_runtime.customProvider(app),
+                );
+            } else {
+                app.auth.openPicker(app.alloc);
+            }
             app.shell.render_requests.request(.footer);
         }
 
@@ -310,6 +330,8 @@ pub fn Runtime(comptime App: type) type {
             }
             switch (choice) {
                 .provider => |provider| try switchProvider(app, provider, true, .manual),
+                .custom_provider => |name| try switchCustomProvider(app, name),
+                .custom_provider_preset => |name| try switchCustomProviderPreset(app, name),
                 .source => |source| try applySourceChoice(app, source),
                 .action => |action| switch (action) {
                     .login => try beginSignIn(app, true),
@@ -329,7 +351,7 @@ pub fn Runtime(comptime App: type) type {
                     },
                     .change_team => try beginTeamPicker(app),
                     .switch_credential => app.auth.openSwitchCredentialPicker(app.alloc),
-                    .switch_provider => app.auth.openProviderPicker(app.alloc, provider_runtime.provider(app)),
+                    .switch_provider => app.auth.openProviderPicker(app.alloc, provider_runtime.provider(app), provider_runtime.customProvider(app)),
                     .automatic => try applyAutomaticCredential(app),
                 },
                 .team => |index| try applyTeamChoice(app, index),
@@ -357,11 +379,20 @@ pub fn Runtime(comptime App: type) type {
                 }
             }
             if (!app.auth.apiKeyEntryActive()) return false;
-            switch (byte) {
-                3, 4 => _ = app.auth.popPickerStage(app.alloc),
-                '\r', '\n' => try submitApiKeyEntry(app),
-                8, 127 => _ = app.auth.deleteApiKeyByte(),
-                else => _ = try app.auth.appendApiKeyByte(app.alloc, byte),
+            if (app.auth.customProviderKeyEntryActive()) {
+                switch (byte) {
+                    3, 4 => cancelCustomProviderKeyEntry(app),
+                    '\r', '\n' => try submitCustomProviderKeyEntry(app),
+                    8, 127 => _ = app.auth.deleteApiKeyByte(),
+                    else => _ = try app.auth.appendApiKeyByte(app.alloc, byte),
+                }
+            } else {
+                switch (byte) {
+                    3, 4 => _ = app.auth.popPickerStage(app.alloc),
+                    '\r', '\n' => try submitApiKeyEntry(app),
+                    8, 127 => _ = app.auth.deleteApiKeyByte(),
+                    else => _ = try app.auth.appendApiKeyByte(app.alloc, byte),
+                }
             }
             app.shell.render_requests.request(.footer);
             return true;
@@ -730,6 +761,300 @@ pub fn Runtime(comptime App: type) type {
             }
         }
 
+        /// Registers a built-in preset into providers.json, reloads the app
+        /// registry, then switches to it like any registered custom provider.
+        /// Preset rows in the provider picker route here.
+        fn switchCustomProviderPreset(
+            app: *App,
+            name: []const u8,
+        ) !void {
+            if (comptime host_target.is_wasm) {
+                try app.writeDomainNotice(.{
+                    .topic = "provider",
+                    .tone = .warning,
+                    .body = "Custom provider switching is unavailable in this WASM session.",
+                }, true);
+                return;
+            }
+            const home = io_mod.getenv("HOME") orelse {
+                try app.writeDomainNotice(.{
+                    .topic = "provider",
+                    .tone = .@"error",
+                    .body = "HOME is not set; cannot register the provider in providers.json.",
+                }, true);
+                return;
+            };
+            const preset = provider_presets.presetNamed(name) orelse {
+                const detail = try std.fmt.allocPrint(
+                    app.alloc,
+                    "No built-in preset named '{s}'.",
+                    .{name},
+                );
+                defer app.alloc.free(detail);
+                try app.writeDomainNotice(.{ .topic = "provider", .tone = .@"error", .body = detail }, true);
+                return;
+            };
+            _ = provider_presets.registerPreset(app.alloc, home, preset) catch |err| {
+                debug_trace.logf("provider", "preset registration failed provider={s} err={s}", .{ name, @errorName(err) });
+                const detail = try std.fmt.allocPrint(
+                    app.alloc,
+                    "Could not register the {s} preset in providers.json: {s}",
+                    .{ name, @errorName(err) },
+                );
+                defer app.alloc.free(detail);
+                try app.writeDomainNotice(.{ .topic = "provider", .tone = .@"error", .body = detail }, true);
+                return;
+            };
+            if (comptime @hasDecl(App, "reloadCustomProviderRegistry")) {
+                app.reloadCustomProviderRegistry();
+            }
+            try switchCustomProvider(app, name);
+        }
+
+        fn switchCustomProvider(
+            app: *App,
+            name: []const u8,
+        ) !void {
+            if (comptime !provider_runtime.supported(App)) {
+                try app.writeDomainNotice(.{
+                    .topic = "provider",
+                    .tone = .warning,
+                    .body = "Provider switching is unavailable in this host.",
+                }, true);
+                return;
+            }
+            if (comptime host_target.is_wasm) {
+                try app.writeDomainNotice(.{
+                    .topic = "provider",
+                    .tone = .warning,
+                    .body = "Custom provider switching is unavailable in this WASM session.",
+                }, true);
+                return;
+            }
+            const current = provider_runtime.provider(app);
+            const current_custom = provider_runtime.customProvider(app);
+            if (current == .custom and std.mem.eql(u8, current_custom, name)) {
+                const already = try std.fmt.allocPrint(app.alloc, "Already using {s} (custom provider).", .{name});
+                defer app.alloc.free(already);
+                try app.writeDomainNotice(.{ .topic = "provider", .tone = .neutral, .body = already }, true);
+                return;
+            }
+            if (app.stream.active or app.worker.queuedPromptCount() > 0) {
+                try app.writeDomainNotice(.{
+                    .topic = "provider",
+                    .tone = .warning,
+                    .body = providerFailureMessage(
+                        .manual,
+                        "Provider switching is unavailable until active and queued work finishes.",
+                        "Subscription sign-in completed, but provider activation is unavailable until active and queued work finishes. The current provider is unchanged.",
+                    ),
+                }, true);
+                return;
+            }
+            try app.flushBeforeBlockingExternalWork();
+
+            const home = io_mod.getenv("HOME") orelse {
+                try app.writeDomainNotice(.{
+                    .topic = "provider",
+                    .tone = .@"error",
+                    .body = "HOME is not set; cannot read providers.json. The current provider is unchanged.",
+                }, true);
+                return;
+            };
+            var registry = custom_providers.load(app.alloc, home) catch {
+                try app.writeDomainNotice(.{
+                    .topic = "provider",
+                    .tone = .@"error",
+                    .body = "Could not read providers.json. The current provider is unchanged.",
+                }, true);
+                return;
+            };
+            defer registry.deinit(app.alloc);
+            const entry = registry.find(name) orelse {
+                const detail = try std.fmt.allocPrint(app.alloc, "No custom provider named '{s}' in providers.json.", .{name});
+                defer app.alloc.free(detail);
+                try app.writeDomainNotice(.{ .topic = "provider", .tone = .@"error", .body = detail }, true);
+                return;
+            };
+            const key_bytes = entry.apiKeyBytes() orelse blk: {
+                if (entry.keyless) break :blk "";
+                app.auth.openCustomProviderKeyPicker(app.alloc, name);
+                app.shell.render_requests.request(.footer);
+                return;
+            };
+            if (entry.defaultModelId() == null) {
+                const detail = try std.fmt.allocPrint(app.alloc, "Custom provider '{s}' exposes no models in providers.json.", .{name});
+                defer app.alloc.free(detail);
+                try app.writeDomainNotice(.{ .topic = "provider", .tone = .@"error", .body = detail }, true);
+                return;
+            }
+
+            var settings = config_runtime.loadMergedSettings(app.alloc, app.workspace_root) catch |err| {
+                debug_trace.logf("provider", "settings load failed err={s}", .{@errorName(err)});
+                try app.writeDomainNotice(.{
+                    .topic = "provider",
+                    .tone = .@"error",
+                    .body = "Could not load the saved provider model. The current provider is unchanged.",
+                }, true);
+                return;
+            };
+            defer settings.deinit(app.alloc);
+            const saved_model = settings.model;
+            const preferred_model = io_mod.getenv("FX_MODEL") orelse saved_model;
+
+            var owned_catalog: std.ArrayList(model_catalog.ModelCatalogEntry) = .empty;
+            defer model_catalog.freeModelCatalog(app.alloc, &owned_catalog);
+            var context = custom_providers.StaticCatalogContext{ .registry = &registry, .provider_name = name };
+            const catalog_provider = custom_providers.staticCatalogProvider(&context);
+            const fetched = catalog_provider.fetch(app.alloc, .{
+                .access = credentials.catalogAccessForCredential(.custom_provider, key_bytes, null),
+                .endpoint = "",
+            }) catch {
+                try app.writeDomainNotice(.{
+                    .topic = "provider",
+                    .tone = .@"error",
+                    .body = providerFailureMessage(
+                        .manual,
+                        "Could not load the target provider catalog. The current provider is unchanged.",
+                        "Subscription sign-in completed, but its model catalog could not be loaded. The current provider is unchanged.",
+                    ),
+                }, true);
+                return;
+            };
+            switch (fetched) {
+                .failure => |failure| {
+                    debug_trace.logf("provider", "catalog rejected provider=custom category={t}", .{failure.category});
+                    try app.writeDomainNotice(.{
+                        .topic = "provider",
+                        .tone = .@"error",
+                        .body = "The target provider catalog could not be validated. The current provider is unchanged.",
+                    }, true);
+                    return;
+                },
+                .catalog => |catalog| {
+                    owned_catalog = catalog;
+                },
+            }
+            if (owned_catalog.items.len == 0) {
+                try app.writeDomainNotice(.{
+                    .topic = "provider",
+                    .tone = .@"error",
+                    .body = "The target provider returned no supported models. The current provider is unchanged.",
+                }, true);
+                return;
+            }
+            const selected_model = selectCatalogModel(owned_catalog.items, null, preferred_model) orelse
+                owned_catalog.items[0].id;
+            var owned_model = try app.alloc.dupe(u8, selected_model);
+            errdefer app.alloc.free(owned_model);
+
+            if (app.stream.active or app.worker.queuedPromptCount() > 0) {
+                try app.writeDomainNotice(.{
+                    .topic = "provider",
+                    .tone = .warning,
+                    .body = providerFailureMessage(
+                        .manual,
+                        "Provider switching is unavailable until active and queued work finishes.",
+                        "Subscription sign-in completed, but provider activation is unavailable until active and queued work finishes. The current provider is unchanged.",
+                    ),
+                }, true);
+                return;
+            }
+
+            if (comptime @hasDecl(@TypeOf(app.model_cache), "adoptOwnedCatalog")) {
+                var adopt_catalog = owned_catalog;
+                app.model_cache.adoptOwnedCatalog(
+                    credentials.catalogAccessForCredential(.custom_provider, key_bytes, null),
+                    &adopt_catalog,
+                );
+            }
+            provider_runtime.adoptOwned(app, .custom, &owned_model, name);
+            if (comptime @hasDecl(App, "refreshCustomProviderState")) {
+                app.refreshCustomProviderState();
+            }
+            const owned_key = (try custom_providers.resolveApiKey(app.alloc, entry)) orelse
+                app.alloc.dupe(u8, key_bytes) catch return error.OutOfMemory;
+            var credential = credentials.Credential{
+                .token = owned_key,
+                .source = .custom_provider,
+            };
+            _ = app.auth.adoptCredential(app.alloc, &credential);
+
+            const body = try std.fmt.allocPrint(
+                app.alloc,
+                "Switched to {s} (custom provider) with {s}.",
+                .{ auth_runtime.customProviderLabel(name), provider_runtime.model(app) },
+            );
+            defer app.alloc.free(body);
+            if (comptime @hasDecl(App, "persistRuntimePreferences")) {
+                var persistence = app.persistRuntimePreferences(.{
+                    .provider = .custom,
+                    .model = provider_runtime.model(app),
+                    .custom_provider = name,
+                });
+                defer persistence.deinit(app.alloc);
+                if (persistence.settings_error != null or persistence.session_error != null) {
+                    debug_trace.logf(
+                        "provider",
+                        "custom switch persistence failed settings={s} session={s}",
+                        .{
+                            if (persistence.settings_error) |err| @errorName(err) else "none",
+                            if (persistence.session_error) |err| @errorName(err) else "none",
+                        },
+                    );
+                }
+            }
+            try app.writeDomainNotice(.{ .topic = "provider", .tone = .neutral, .body = body }, true);
+            if (comptime @hasDecl(App, "startModelCacheWarmup")) app.startModelCacheWarmup();
+        }
+
+        fn cancelCustomProviderKeyEntry(app: *App) void {
+            _ = app.auth.popPickerStage(app.alloc);
+            app.auth.openProviderPicker(
+                app.alloc,
+                provider_runtime.provider(app),
+                provider_runtime.customProvider(app),
+            );
+            app.shell.render_requests.request(.footer);
+        }
+
+        fn submitCustomProviderKeyEntry(app: *App) !void {
+            // Own the name before the stage teardown below: clearing the entry
+            // state scribbles over the runtime's name buffer in debug builds.
+            const owned_name = try app.alloc.dupe(u8, app.auth.customKeyEntryProviderName());
+            defer app.alloc.free(owned_name);
+            const name = owned_name;
+            const home = io_mod.getenv("HOME") orelse {
+                try app.writeDomainNotice(.{
+                    .topic = "provider",
+                    .tone = .@"error",
+                    .body = "HOME is not set; cannot save the API key to providers.json.",
+                }, true);
+                return;
+            };
+            const owned_key = app.auth.takeApiKeyBuffer(app.alloc);
+            defer secret.zeroAndFree(app.alloc, owned_key);
+            const trimmed = std.mem.trim(u8, owned_key, " \t\r\n");
+            if (trimmed.len == 0) {
+                cancelCustomProviderKeyEntry(app);
+                return;
+            }
+            custom_providers.storeApiKey(app.alloc, home, name, trimmed) catch |err| {
+                debug_trace.logf("provider", "custom provider key save failed provider={s} err={s}", .{ name, @errorName(err) });
+                const detail = try std.fmt.allocPrint(
+                    app.alloc,
+                    "Could not save the {s} API key to providers.json: {s}",
+                    .{ name, @errorName(err) },
+                );
+                defer app.alloc.free(detail);
+                try app.writeDomainNotice(.{ .topic = "provider", .tone = .@"error", .body = detail }, true);
+                return;
+            };
+            app.auth.exitApiKeyStage(app.alloc, .saved);
+            app.auth.closePicker(app.alloc);
+            try switchCustomProvider(app, name);
+        }
+
         fn switchProvider(
             app: *App,
             target: model_provider.ProviderId,
@@ -920,6 +1245,7 @@ pub fn Runtime(comptime App: type) type {
                 .gateway => settings.model,
                 .codex => settings.codex_model,
                 .grok => settings.grok_model,
+                .custom => settings.model,
             };
             const current_model = if (intent == .post_oauth and current == target)
                 provider_runtime.model(app)
@@ -947,7 +1273,10 @@ pub fn Runtime(comptime App: type) type {
             }
 
             app.model_cache.adoptOwnedCatalog(access, &catalog);
-            app.provider_selection.adoptOwned(target, &owned_model);
+            app.provider_selection.adoptOwned(target, &owned_model, "");
+            if (comptime @hasDecl(App, "refreshCustomProviderState")) {
+                app.refreshCustomProviderState();
+            }
             _ = app.auth.adoptCredential(app.alloc, &credential);
             reconcileGatewayCredential(app);
 
@@ -1411,7 +1740,7 @@ test "interactive subscription sign-in rejects active and queued work before OAu
             switch (provider) {
                 .codex => try Runtime(BusySignInApp).beginChatGptSignIn(&app),
                 .grok => try Runtime(BusySignInApp).beginGrokSignIn(&app),
-                .gateway => unreachable,
+                .gateway, .custom => unreachable,
             }
 
             try std.testing.expectEqual(@as(usize, 0), app.auth.start_count);

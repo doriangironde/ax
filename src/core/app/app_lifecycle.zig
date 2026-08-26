@@ -120,6 +120,9 @@ pub const StartupState = struct {
     credential_onboarding_skipped: bool = false,
     stored_key_status: credentials.StoredKeyReadStatus = .not_attempted,
     provider: model_provider.ProviderId = .gateway,
+    /// Registered custom provider name; owned by this state when
+    /// `provider == .custom`.
+    custom_provider: []u8 = &.{},
     selected_model: []u8 = &.{},
     configured_model: []u8 = &.{},
     model_source: config_runtime.ModelSource = .compiled_default,
@@ -153,6 +156,7 @@ pub const StartupState = struct {
         self.workspace_access.deinit(alloc);
         if (self.workspace_root.len > 0) alloc.free(self.workspace_root);
         if (self.credential) |*credential| credential.deinit(alloc);
+        if (self.custom_provider.len > 0) alloc.free(self.custom_provider);
         if (self.selected_model.len > 0) alloc.free(self.selected_model);
         if (self.configured_model.len > 0) alloc.free(self.configured_model);
         self.permission_rules.deinit(alloc);
@@ -395,6 +399,9 @@ fn loadStartupStateFromOwnedWorkspace(
 
     const configured_selection = try configuredProviderSelection(default_model, settings);
     state.provider = configured_selection.provider;
+    if (configured_selection.custom_provider) |custom_name| {
+        state.custom_provider = try alloc.dupe(u8, custom_name);
+    }
     state.configured_model = try alloc.dupe(u8, configured_selection.model);
     state.model_source = detailed.model_source orelse .compiled_default;
     state.selected_model = try loadInitialModel(alloc, configured_selection.model, null);
@@ -404,13 +411,14 @@ fn loadStartupStateFromOwnedWorkspace(
     state.prompt_history_enabled = settings.prompt_history_enabled orelse true;
     state.prompt_history_store_allowed = detailed.prompt_history_store_allowed;
     if (credential_mode) |mode| {
-        const resolution = try credentials.resolveForProvider(
+        const resolution = try credentials.resolveForProviderWithCustom(
             alloc,
             transport,
             secret_store,
             mode,
             state.provider,
             settings.credential_source,
+            if (state.provider == .custom) settings.custom_provider else null,
         );
         state.credential = resolution.credential;
         state.stored_key_status = resolution.stored_key_status;
@@ -1109,12 +1117,17 @@ fn configuredProviderSelection(
     settings: *const config_runtime.Settings,
 ) !model_provider.ProviderSelection {
     const provider = settings.provider orelse .gateway;
-    const model = switch (provider) {
-        .gateway => settings.model orelse default_model,
-        .codex => settings.codex_model orelse return error.CodexModelNotSelected,
-        .grok => settings.grok_model orelse return error.GrokModelNotSelected,
+    const result: model_provider.ProviderSelection = switch (provider) {
+        .gateway => .{ .provider = provider, .model = settings.model orelse default_model },
+        .codex => .{ .provider = provider, .model = settings.codex_model orelse return error.CodexModelNotSelected },
+        .grok => .{ .provider = provider, .model = settings.grok_model orelse return error.GrokModelNotSelected },
+        .custom => .{
+            .provider = provider,
+            .model = settings.model orelse return error.CustomProviderModelNotSelected,
+            .custom_provider = settings.custom_provider orelse return error.CustomProviderNameNotSelected,
+        },
     };
-    return .{ .provider = provider, .model = model };
+    return result;
 }
 
 fn initialModelId(default_model: []const u8, configured: ?[]const u8) []const u8 {
@@ -1155,6 +1168,27 @@ test "startup provider chooses only its provider-scoped model" {
     const grok = try configuredProviderSelection("default/model", &grok_settings);
     try std.testing.expectEqual(model_provider.ProviderId.grok, grok.provider);
     try std.testing.expectEqualStrings("grok-model", grok.model);
+
+    const custom_settings = config_runtime.Settings{
+        .provider = .custom,
+        .model = @constCast("glm-4.6"),
+        .custom_provider = @constCast("opencode-go"),
+    };
+    const custom = try configuredProviderSelection("default/model", &custom_settings);
+    try std.testing.expectEqual(model_provider.ProviderId.custom, custom.provider);
+    try std.testing.expectEqualStrings("glm-4.6", custom.model);
+    try std.testing.expectEqualStrings("opencode-go", custom.custom_provider.?);
+
+    const missing_custom_name = config_runtime.Settings{ .provider = .custom, .model = @constCast("glm-4.6") };
+    try std.testing.expectError(
+        error.CustomProviderNameNotSelected,
+        configuredProviderSelection("default/model", &missing_custom_name),
+    );
+    const missing_custom_model = config_runtime.Settings{ .provider = .custom, .custom_provider = @constCast("opencode-go") };
+    try std.testing.expectError(
+        error.CustomProviderModelNotSelected,
+        configuredProviderSelection("default/model", &missing_custom_model),
+    );
 }
 
 fn loadInitialModel(alloc: Allocator, default_model: []const u8, configured: ?[]const u8) ![]u8 {

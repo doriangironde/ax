@@ -5,13 +5,21 @@
 ### New Features
 
 - **ax identity:** The binary, welcome header, help text, error prefixes, resume commands, and upgrade traces say `ax`; config, session format, WASM exports, and wire protocol keys keep the upstream fx names for compatibility.
+- **Custom providers:** Point ax at any OpenAI-compatible endpoint through `~/.fx/providers.json` (base URL, API key or key env var, model list with context and reasoning metadata). `ax provider <name>` selects one, `ax models` lists its models, and requests go directly to the endpoint without the AI Gateway at all. This unlocks flat-rate subscriptions like OpenCode Go and local servers such as Ollama, vLLM, and LM Studio.
+- **Custom provider credentials:** Keys resolve from the registry env reference, an inline key, or `HOME` resolution, tracked as their own credential source so sessions never confuse them with Gateway keys.
+- **Built-in provider presets:** A curated catalog of OpenAI-compatible endpoints (OpenCode Go, OpenRouter, Groq, DeepSeek, Ollama, Together, Mistral, Cerebras, xAI, Gemini, Perplexity, and Moonshot) registers into `providers.json` on first use: `ax provider <preset>` registers and selects, `ax provider` lists everything, and the `/login` Switch provider list offers unregistered presets. Keyless presets such as Ollama need no API key and send no auth header.
 
 ### Improvements
 
 - **Fully green CI:** Material, `Benchmarks`, and the four-runner `Full CI` matrix pass; the release tarballs and the PGSO qualification pipeline tolerate the renamed product binary.
+- **Provider commands and picker:** `ax provider` accepts registered custom provider names, `ax models` lists their models with the saved selection, and the interactive `/login` Switch provider list shows registered custom providers, marks the active one, and activates a picked provider in place. A custom provider without a key prompts inline for one and saves it to `providers.json` instead of requiring an environment variable.
+- **Login menu providers:** `/login` lists registered custom providers and unregistered presets directly on its menu after the built-in sign-in ways, so picking one no longer needs the extra **Switch provider** step; choosing a preset registers it first, keyless providers switch straight away, the active provider row reads `current`, and unregistered presets carry no description. Provider rows use curated display names (OpenCode Go, OpenRouter, Ollama), including the API-key entry heading and the switch notice.
 
 ### Bug Fixes
 
+- **Custom provider startup crash:** Starting an interactive session on a registered custom provider no longer segfaults; the model-cache warmup thread reads the catalog context from the app, not a stack local.
+- **Custom provider tool schemas:** Tool definitions are sent in the standard OpenAI nesting under `function`, which strict servers (OpenCode Go) require; flattened tool objects drew an HTTP 400 from the upstream provider.
+- **Custom provider key entry:** Typing an API key in the `/login` picker saves it to `providers.json` and completes the switch; the name no longer gets corrupted during stage teardown (the "No custom provider named" garbage-name error).
 - **MCP wire identity:** The binary's `clientInfo` name reverted to `fx` at all emission sites so the conformance fixture oracle, ACP sessions, and the modern MCP subscription flow agree; recovery continuation and prompt context markers keep their `fx` keys.
 
 ## 0.0.5

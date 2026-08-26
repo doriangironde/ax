@@ -371,6 +371,9 @@ pub fn streamProviderFor(
             @import("../core/agent/stream_provider.zig").unavailable_provider,
         .grok => state.cfg.grok_agent_stream orelse
             @import("../core/agent/stream_provider.zig").unavailable_provider,
+        // Custom providers are interactive/ask-only in v1; ACP sessions that
+        // restore custom preferences report an unavailable stream.
+        .custom => @import("../core/agent/stream_provider.zig").unavailable_provider,
     };
 }
 
@@ -382,6 +385,7 @@ pub fn catalogProviderFor(
         .gateway => state.cfg.gateway_provider.model_catalog,
         .codex => state.cfg.codex_model_catalog,
         .grok => state.cfg.grok_model_catalog,
+        .custom => null,
     };
 }
 
@@ -1714,6 +1718,9 @@ fn handleSetConfigOption(state: *ServerState, alloc: Allocator, msg: *jsonrpc.Me
                 .gateway => settings.model,
                 .codex => settings.codex_model,
                 .grok => settings.grok_model,
+                // ACP sessions route custom providers through the interactive
+                // selection only; the saved model slot still applies.
+                .custom => settings.model,
             };
             var selected_model = catalog.items[0].id;
             if (saved_model) |saved| {

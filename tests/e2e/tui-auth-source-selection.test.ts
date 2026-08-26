@@ -1105,6 +1105,76 @@ tmuxTest(
 );
 
 tmuxTest(
+  "login menu lists registered custom providers and presets for direct pickup",
+  async () => {
+    home = mkdtempSync(join(tmpdir(), "fx-tui-login-providers-"));
+    stderrPath = join(home, "stderr.log");
+    writeFileSync(stderrPath, "");
+    gateway = startFakeGateway([]);
+    oauth = startFakeOAuth(ACQUIRED_LOGIN_TOKEN, undefined, 3600, 1, {});
+    mkdirSync(join(home, ".fx"), { recursive: true });
+    writeFileSync(
+      join(home, ".fx", "providers.json"),
+      JSON.stringify({
+        providers: [
+          {
+            name: "ollama",
+            base_url: "http://localhost:11434/v1",
+            keyless: true,
+            models: [{ id: "llama3.2" }],
+          },
+        ],
+      }),
+    );
+
+    session = await startFx(home, stderrPath, gateway, oauth.issuerUrl);
+    await session.waitForComposer(TIMEOUT);
+    await session.resizeWindow(100, 48);
+
+    // The sign-in menu lists the registered provider directly, and presets
+    // appear further down without a description.
+    await session.sendText("/login");
+    await session.waitForText("Sign in with Codex", TIMEOUT);
+    const topRows = await session.waitForPane(
+      (pane) => pane.includes("Sign in with Vercel") && pane.includes("Ollama"),
+      TIMEOUT,
+    );
+    expect(topRows).toContain("available");
+
+    // Selecting the registered keyless provider switches without a key entry.
+    await session.sendKeys("Down");
+    await session.sendKeys("Down");
+    await session.sendKeys("Down");
+    await session.sendKeys("Down");
+    await session.sendKeys("Enter");
+    await session.waitForText("Switched to Ollama (custom provider)", TIMEOUT);
+
+    // Reopening the menu, a preset row (index 6: after the four built-in rows,
+    // the registered provider, and the first preset opencode-go) registers the
+    // provider and opens the masked key entry.
+    await session.sendText("/login");
+    await session.waitForText("Sign in with Codex", TIMEOUT);
+    for (let i = 0; i < 6; i++) await session.sendKeys("Down");
+    await session.sendKeys("Enter");
+    await session.waitForText("Paste the OpenRouter API key", TIMEOUT);
+    const registered = JSON.parse(
+      readFileSync(join(home, ".fx", "providers.json"), "utf8"),
+    );
+    const openrouter = registered.providers.find(
+      (entry: { name: string }) => entry.name === "openrouter",
+    );
+    expect(openrouter).toBeDefined();
+    expect(openrouter.api_key_env).toBe("OPENROUTER_API_KEY");
+
+    await session.sendKeys("C-c");
+    await session.waitForComposer(TIMEOUT);
+    expect(session.isAlive()).toBe(true);
+    expect(readFileSync(stderrPath, "utf8")).toBe("");
+  },
+  60_000,
+);
+
+tmuxTest(
   "setup provider switch reauthenticates current Codex and replaces an unavailable model",
   async () => {
     home = mkdtempSync(join(tmpdir(), "fx-tui-chatgpt-success-"));
@@ -1371,8 +1441,7 @@ tmuxTest(
         pane.includes("Sign in with Vercel") &&
         pane.includes("Sign in with Codex") &&
         pane.includes("Sign in with Grok") &&
-        pane.includes("API key") &&
-        pane.includes("Switch provider"),
+        pane.includes("API key"),
       TIMEOUT,
     );
     expect(root).not.toContain("AI_GATEWAY_API_KEY");
@@ -1392,7 +1461,12 @@ tmuxTest(
     await session.sendKeys("Escape");
     await session.waitForText("Setup", TIMEOUT);
 
-    await session.sendKeys("Down");
+    // The provider rows (presets and registered customs) sit between API key
+    // and the management rows; Switch provider is at index 16, thirteen rows
+    // below API key.
+    for (let index = 0; index < 13; index += 1) {
+      await session.sendKeys("Down");
+    }
     await session.sendKeys("Enter");
     await session.waitForText("Switch provider", TIMEOUT);
     await session.sendKeys("Escape");
@@ -1472,7 +1546,9 @@ async function waitForTrace(tracePath: string, needle: string): Promise<void> {
 }
 
 async function enterSwitchCredential(pickerSession: TmuxSession): Promise<void> {
-  for (let index = 0; index < 6; index += 1) {
+  // Root menu: 4 built-in rows, then 12 preset/custom provider rows, then
+  // Switch provider (16) and Change team (17) before Switch credential (18).
+  for (let index = 0; index < 18; index += 1) {
     await pickerSession.sendKeys("Down");
   }
   await pickerSession.sendKeys("Enter");
@@ -1482,7 +1558,9 @@ async function enterSwitchCredential(pickerSession: TmuxSession): Promise<void> 
 async function openProviderPicker(pickerSession: TmuxSession): Promise<void> {
   await pickerSession.sendText("/setup");
   await pickerSession.waitForText("Setup", TIMEOUT);
-  for (let index = 0; index < 4; index += 1) {
+  // Root menu: 4 built-in rows, then 12 preset/custom provider rows; the
+  // Switch provider row sits at index 16 and wraps its own stage below.
+  for (let index = 0; index < 16; index += 1) {
     await pickerSession.sendKeys("Down");
   }
   await pickerSession.sendKeys("Enter");
@@ -1642,11 +1720,11 @@ tmuxTest(
 
     await session.sendText("/setup");
     await session.waitForText("Setup", TIMEOUT);
-    await session.sendKeys("Down");
-    await session.sendKeys("Down");
-    await session.sendKeys("Down");
-    await session.sendKeys("Down");
-    await session.sendKeys("Down");
+    // Root menu: 4 built-in rows, 12 preset/custom provider rows, then
+    // Switch provider; Change team sits at index 17.
+    for (let index = 0; index < 17; index += 1) {
+      await session.sendKeys("Down");
+    }
     await session.sendKeys("Enter");
     await session.waitForText("Choose a Vercel team", TIMEOUT);
     await session.sendKeys("Enter");
@@ -3260,7 +3338,6 @@ tmuxTest(
         pane.includes("Sign in with Vercel") &&
         pane.includes("Sign in with Grok") &&
         pane.includes("API key") &&
-        pane.includes("Switch provider"),
       TIMEOUT,
     );
     expect(inventory).not.toMatch(/^\s+ax login\s+/m);
@@ -3358,7 +3435,6 @@ tmuxTest(
         pane.includes("ax login credential refresh failed.") &&
         pane.includes("Choose another source below") &&
         pane.includes("Setup") &&
-        pane.includes("Switch provider"),
       TIMEOUT,
     );
     expect(failed).toContain(`${promptHead}${promptTail}`);
@@ -3592,7 +3668,6 @@ tmuxTest(
       (pane) =>
         pane.includes(blockedPrompt) &&
         pane.includes("ax login credential refresh failed.") &&
-        pane.includes("Switch provider"),
       TIMEOUT,
     );
     expect(gateway.requests).toHaveLength(0);
@@ -3664,7 +3739,6 @@ tmuxTest(
       (pane) =>
         pane.includes(firstPrompt) &&
         pane.includes("ax login credential refresh failed.") &&
-        pane.includes("Switch provider"),
       TIMEOUT,
     );
     expect(firstFailure).toContain("Choose another source below.");
@@ -3699,7 +3773,6 @@ tmuxTest(
       (pane) =>
         pane.includes(secondPrompt) &&
         pane.includes("ax login credential refresh failed.") &&
-        pane.includes("Switch provider"),
       TIMEOUT,
     );
     expect(gateway.requests).toHaveLength(0);

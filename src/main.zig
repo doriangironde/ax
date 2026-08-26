@@ -51,6 +51,7 @@ const command_specs = @import("core/slash_commands/command_specs.zig");
 const builtin_context = @import("builtins/context.zig");
 const builtin_gateway = @import("builtins/gateway.zig");
 const builtin_providers = @import("builtins/providers.zig");
+const custom_providers = @import("core/config/custom_providers.zig");
 const openai_codex_models = @import("gateway/openai_codex_models.zig");
 const openai_codex_permission_reviewer = @import("gateway/openai_codex_permission_reviewer.zig");
 const xai_grok_models = @import("gateway/xai_grok_models.zig");
@@ -432,10 +433,86 @@ const App = struct {
         return builtin_gateway.credits_provider;
     }
 
-    pub fn agentStreamProvider(self: *const Self) agent_stream_provider.Provider {
+    pub fn agentStreamProvider(self: *Self) agent_stream_provider.Provider {
+        const selection = self.provider_selection.selection();
+        if (selection.provider == .custom) {
+            if (self.selectionCustomEntry()) |entry| {
+                return builtin_providers.agentStreamForCustom(entry);
+            }
+            return agent_stream_provider.unavailable_provider;
+        }
         return self.subagentProviderRoutes()
-            .select(self.provider_selection.selection().provider)
+            .select(selection.provider)
             .agent_stream_provider;
+    }
+
+    /// Loads the custom provider registry on first use. A missing or malformed
+    /// file degrades to an empty registry; the interactive flow surfaces the
+    /// selected provider's absence at credential time.
+    pub fn ensureCustomRegistry(self: *Self) void {
+        if (self.custom_registry.entries.items.len > 0 or self.custom_registry_loaded) return;
+        self.custom_registry_loaded = true;
+        if (io_mod.getenv("HOME")) |home| {
+            self.custom_registry = custom_providers.load(std.heap.c_allocator, home) catch |err| {
+                debug_trace.logf("config", "custom provider registry load failed err={s}", .{@errorName(err)});
+                return;
+            };
+        }
+        self.refreshCustomProviderState();
+    }
+
+    /// The registered entry behind the current selection, when it is a custom
+    /// provider with a registered name. Loads the registry on first use.
+    pub fn selectionCustomEntry(self: *Self) ?*const custom_providers.Entry {
+        self.ensureCustomRegistry();
+        const selection = self.provider_selection.selection();
+        if (selection.provider != .custom) return null;
+        const name = selection.custom_provider orelse return null;
+        return self.custom_registry.find(name);
+    }
+
+    /// Rebuilds the catalog routing context for the current selection. Call
+    /// after every provider selection mutation.
+    pub fn refreshCustomProviderState(self: *Self) void {
+        const selection = self.provider_selection.selection();
+        self.custom_catalog_context = null;
+        if (selection.provider == .custom) {
+            if (selection.custom_provider) |name| {
+                if (self.custom_registry.find(name) != null) {
+                    self.custom_catalog_context = .{
+                        .registry = &self.custom_registry,
+                        .provider_name = name,
+                    };
+                }
+            }
+        }
+    }
+
+    /// Drops the lazily loaded registry so the next lookup re-reads
+    /// providers.json. Called after a built-in preset is registered while the
+    /// app is running; without it the stale in-memory registry would not
+    /// contain the new entry.
+    pub fn reloadCustomProviderRegistry(self: *Self) void {
+        if (!self.custom_registry_loaded and self.custom_registry.entries.items.len == 0) {
+            self.refreshCustomProviderState();
+            return;
+        }
+        self.custom_registry.deinit(std.heap.c_allocator);
+        self.custom_registry = .{};
+        self.custom_registry_loaded = false;
+        self.refreshCustomProviderState();
+    }
+
+    pub fn customCatalogProviderForSelection(self: *Self) ?model_catalog.Provider {
+        self.ensureCustomRegistry();
+        const selection = self.provider_selection.selection();
+        if (selection.provider != .custom) return null;
+        self.refreshCustomProviderState();
+        // The provider's context must outlive this call: the model cache runs
+        // catalog fetches on a worker thread, so it has to point at the app
+        // field, not a stack local.
+        const context_ptr: *const custom_providers.StaticCatalogContext = &(self.custom_catalog_context orelse return null);
+        return builtin_providers.modelCatalogForCustom(context_ptr);
     }
 
     pub fn fetchProviderCatalog(
@@ -443,6 +520,17 @@ const App = struct {
         provider: model_provider.ProviderId,
         access: credentials.CatalogAccess,
     ) !model_catalog.ProviderResult {
+        if (provider == .custom) {
+            if (self.customCatalogProviderForSelection()) |catalog_provider| {
+                return catalog_provider.fetch(self.alloc, .{
+                    .access = access,
+                    .endpoint = builtin_gateway.models_path,
+                    .cancel_flag = &self.worker.worker_cancel_requested,
+                    .view = .picker,
+                });
+            }
+            return .{ .failure = .{ .category = .runtime } };
+        }
         return builtin_providers.modelCatalog(provider).fetch(self.alloc, .{
             .access = access,
             .endpoint = builtin_gateway.models_path,
@@ -495,6 +583,12 @@ const App = struct {
         if (host_target.is_wasm) host.unavailable_secret_store else native_host.secret_store,
     ),
     provider_selection: provider_runtime.Runtime = provider_runtime.Runtime.init(std.heap.c_allocator),
+    /// Custom provider registry (`~/.fx/providers.json`), loaded on first use.
+    custom_registry: custom_providers.Registry = .{},
+    custom_registry_loaded: bool = false,
+    /// Catalog routing context for the selected custom provider. Rebuilt by
+    /// `refreshCustomProviderState` whenever the provider selection changes.
+    custom_catalog_context: ?custom_providers.StaticCatalogContext = null,
     model_cache: model_cache_runtime.Runtime = model_cache_runtime.Runtime.init(std.heap.c_allocator, builtin_gateway.models_path),
     workspace_root: []u8 = &.{},
     workspace_identity: statusline_identity.Runtime = .{},
@@ -840,6 +934,8 @@ const App = struct {
         self.shell.deinit(self.alloc);
         self.pacer.deinit(self.alloc);
         self.provider_selection.deinit();
+        self.custom_registry.deinit(std.heap.c_allocator);
+        self.custom_catalog_context = null;
         self.session_title.deinit(self.alloc);
         SessionAppRuntime.deinitPersistence(self);
         if (self.requested_resume) |*target| {
@@ -1594,14 +1690,14 @@ const App = struct {
         try self.permission_engine.allow(self.alloc, tool_name, target_path);
     }
 
-    pub fn permissionReviewerProvider(self: *const App) ?permission_auto_classifier.Provider {
+    pub fn permissionReviewerProvider(self: *App) ?permission_auto_classifier.Provider {
         return self.subagentProviderRoutes()
             .select(self.provider_selection.selection().provider)
             .permission_reviewer_provider;
     }
 
-    pub fn subagentProviderRoutes(_: *const App) subagent_agent_adapter.ProviderRoutes {
-        return .{
+    pub fn subagentProviderRoutes(self: *Self) subagent_agent_adapter.ProviderRoutes {
+        var routes: subagent_agent_adapter.ProviderRoutes = .{
             .gateway = .{
                 .agent_stream_provider = if (comptime host_target.is_wasm)
                     js_host_stream_provider.provider()
@@ -1633,6 +1729,16 @@ const App = struct {
                     null,
             },
         };
+        const selection = self.provider_selection.selection();
+        if (selection.provider == .custom and !host_target.is_wasm) {
+            if (self.selectionCustomEntry()) |entry| {
+                routes.custom = .{
+                    .agent_stream_provider = builtin_providers.agentStreamForCustom(entry),
+                    .permission_reviewer_provider = null,
+                };
+            }
+        }
+        return routes;
     }
 
     pub fn describeToolAction(self: *App, arena: Allocator, call: ToolCall, display_target: ?[]const u8, advertised_dynamic_tool_names: []const []const u8) ![]const u8 {
@@ -1737,6 +1843,16 @@ const App = struct {
     }
 
     pub fn fetchModelIds(self: *App) !std.ArrayList([]u8) {
+        if (self.provider_selection.selection().provider == .custom) {
+            if (self.customCatalogProviderForSelection()) |catalog_provider| {
+                return AgentAppRuntime.fetchModelIds(
+                    self,
+                    catalog_provider,
+                    builtin_gateway.models_path,
+                );
+            }
+            return std.ArrayList([]u8).empty;
+        }
         return AgentAppRuntime.fetchModelIds(
             self,
             if (comptime host_target.is_wasm)
@@ -1757,6 +1873,13 @@ const App = struct {
                 js_host_model_catalog.provider,
                 self.auth.modelCatalogAccess(),
             );
+        } else if (self.provider_selection.selection().provider == .custom) {
+            if (self.customCatalogProviderForSelection()) |catalog_provider| {
+                self.model_cache.startWarmup(
+                    catalog_provider,
+                    self.auth.modelCatalogAccess(),
+                );
+            }
         } else {
             self.model_cache.startWarmup(
                 builtin_providers.modelCatalog(self.provider_selection.selection().provider),
@@ -3156,6 +3279,32 @@ fn needsEarlyThreadedIo(args: []const [:0]const u8) bool {
         std.mem.eql(u8, command, "doctor") or
         std.mem.eql(u8, command, "models") or
         std.mem.eql(u8, command, "credits");
+}
+
+test "custom catalog provider context outlives the constructing call" {
+    // The model cache fetches catalog entries on a worker thread, so the
+    // provider returned here must point at the app field, never a stack local.
+    const alloc = std.testing.allocator;
+    var app = App{ .alloc = alloc };
+    defer app.deinit();
+
+    const registry = custom_providers.parse(
+        std.heap.c_allocator,
+        "{\"providers\":[{\"name\":\"mock\",\"base_url\":\"http://127.0.0.1:1/v1\"," ++
+            "\"models\":[{\"id\":\"m\"}]}]}",
+    ) catch unreachable;
+    app.custom_registry = registry;
+    app.custom_registry_loaded = true;
+    var model = std.heap.c_allocator.dupe(u8, "m") catch unreachable;
+    app.provider_selection.adoptOwned(.custom, &model, "mock");
+    app.refreshCustomProviderState();
+
+    const provider = app.customCatalogProviderForSelection().?;
+    const expected: *const custom_providers.StaticCatalogContext = &app.custom_catalog_context.?;
+    try std.testing.expectEqual(
+        @as(*anyopaque, @ptrCast(@constCast(expected))),
+        @as(*anyopaque, @ptrCast(provider.context orelse return error.TestExpectedContext)),
+    );
 }
 
 test "auth and upgrade commands use early threaded io without full entry config" {
