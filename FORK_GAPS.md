@@ -274,9 +274,10 @@ in main.zig).
 2. Only `openai-completions` api_type exists. `anthropic-messages` and
    `openai-responses` are future enum values; unknown api_types are skipped at
    registry load with the rest of the entry intact.
-3. No automatic permission reviewer on the custom route, no
-   `/v1/models` fetch (static catalog only), no auth header templating
-   beyond `Bearer <key>` (or no header at all for keyless entries).
+3. No automatic permission reviewer on the custom route, no auth header
+   templating beyond `Bearer <key>` (or no header at all for keyless
+   entries). The `/v1/models` fetch is DONE (v1): `ax provider refresh
+   <name>` (see below).
 4. WASM hosts never carry custom routes.
 5. The `/login` stage refreshes the registry each time it opens, but
    the app's lazily loaded in-memory registry is only re-read on restart; a
@@ -340,6 +341,31 @@ rejects them with `tools[0]: missing field 'function'`; the transport unit test
 pins the nested shape. Verified live against opencode.ai after the fix: plain
 and tool-calling `ax ask` round trips (deepseek-v4-flash-vision-exp, stored
 inline key) complete end to end.
+
+**Model refresh (v1, 2026-08-26):** `ax provider refresh <name>` fetches
+`<base_url>/models` and merges the catalog into providers.json atomically.
+Merge policy: newly advertised models are added; models that already exist
+keep their declared metadata (fetched metadata wins per field); models the
+endpoint dropped are removed except one retained model — the provider's
+currently selected model (`models.custom` in settings), or the previous first
+model when nothing is selected — so the selection always survives. The merged
+list is capped at `max_models_per_provider` (retained entry first, so
+truncation never drops the selection). Files: `refreshModels` +
+`ModelRefreshSummary` in `custom_providers.zig` (mutates the raw JSON document
+in the parse arena, atomic tmp+rename write via the extracted `writeDocument`);
+`fetchModelCatalog`/`parseModelsCatalog`/`modelsEndpoint` in
+`openai_compatible.zig` (bounded GET via `runBoundedHttpOperation`, Bearer key
+or none for keyless, tolerant parse that rejects empty catalogs);
+`refreshCustomProviderModels` in `cli_surface.zig` (usage:
+`ax provider <gateway|codex|grok|custom-name> | refresh <custom-name>`).
+Caveats: no `--json` summary yet; a GET request must be finalized with
+`sendBodilessUnflushed()` + `connection.flush()` before `receiveHead` — without
+it the head never leaves and the CLI hangs (hit and fixed during the e2e).
+Verified end to end against `scripts/local-mock-openai.py` (which now serves
+GET /v1/models, shapeable via `MODELS_JSON`): phase 1 add/keep/remove,
+phase 2 retention of the selected model with metadata and ordering, plus
+unknown-provider, invalid-name, and bare-`refresh` usage errors. Zig unit
+tests cover the merge policy, the tolerant parse, and the endpoint builder.
 
 **E2E verification (2026-08-24, this machine, sandboxed shell):** a local
 mock OpenAI-compatible server (`scripts/local-mock-openai.py`, run on

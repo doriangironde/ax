@@ -1,15 +1,32 @@
 #!/usr/bin/env python3
-"""Minimal OpenAI-compatible chat completions server for ax e2e verification.
+"""Minimal OpenAI-compatible server for ax e2e verification.
 
-Serves POST /v1/chat/completions with SSE chunks: a greeting, an optional tool
-call when the request includes tools and the prompt asks for a tool, usage, and
-[DONE]. Also serves GET /healthz.
+Serves POST /v1/chat/completions with SSE chunks (greeting, optional tool call,
+usage, [DONE]), GET /v1/models with an OpenAI-style catalog, and GET /healthz.
+The models catalog defaults to `helper` + `brand-new`; set MODELS_JSON to an
+individual model object (or JSON array of them) to shape a refresh scenario.
 """
 import json
+import os
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 43210
+
+
+def models_catalog():
+    configured = os.environ.get("MODELS_JSON")
+    if configured:
+        parsed = json.loads(configured)
+        items = parsed if isinstance(parsed, list) else [parsed]
+        return {"object": "list", "data": items}
+    return {
+        "object": "list",
+        "data": [
+            {"id": "helper", "object": "model", "created": 0, "owned_by": "ax-e2e"},
+            {"id": "brand-new", "object": "model", "created": 0, "owned_by": "ax-e2e"},
+        ],
+    }
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -19,8 +36,18 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
     def do_GET(self):
+        with open("/tmp/mock-openai.log", "a") as log:
+            log.write("GET %s\n" % self.path)
         if self.path == "/healthz":
             body = b'{"status":"ok"}'
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        if self.path in ("/models", "/v1/models"):
+            body = json.dumps(models_catalog()).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))

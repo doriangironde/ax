@@ -480,6 +480,153 @@ pub fn chatCompletionsEndpoint(alloc: Allocator, base_url: []const u8) ![]u8 {
     return std.fmt.allocPrint(alloc, "{s}/chat/completions", .{trimmed});
 }
 
+/// The models-list request path for an OpenAI-compatible API root. A base URL
+/// that already ends in `/models` (or `/chat/completions`) is normalized to a
+/// single `/models` suffix.
+pub fn modelsEndpoint(alloc: Allocator, base_url: []const u8) ![]u8 {
+    const trimmed = std.mem.trim(u8, base_url, "/");
+    if (std.mem.endsWith(u8, trimmed, "/models")) return alloc.dupe(u8, trimmed);
+    if (std.mem.endsWith(u8, trimmed, "/chat/completions")) {
+        return std.fmt.allocPrint(alloc, "{s}/models", .{trimmed[0 .. trimmed.len - "/chat/completions".len]});
+    }
+    return std.fmt.allocPrint(alloc, "{s}/models", .{trimmed});
+}
+
+const max_models_catalog_bytes: usize = 1024 * 1024;
+
+const OpenModelsOperation = struct {
+    client: *std.http.Client,
+    uri: std.Uri,
+    auth_header: ?[]const u8,
+
+    pub fn run(self: *@This()) !OpenedRequest {
+        return .{ .request = try self.client.request(.GET, self.uri, .{
+            .headers = .{
+                .content_type = .{ .override = "application/json" },
+                .authorization = if (self.auth_header) |header| .{ .override = header } else .omit,
+                .accept_encoding = .omit,
+                .user_agent = .{ .override = gateway_client.user_agent },
+            },
+            .extra_headers = &.{.{ .name = "accept", .value = "application/json" }},
+            .keep_alive = false,
+            .redirect_behavior = .unhandled,
+        }) };
+    }
+};
+
+/// Fetches the live model catalog from `<base_url>/models` for a registered
+/// custom provider. The caller owns the returned entries. A keyless entry
+/// sends no Authorization header; an entry with a configured key sends
+/// Bearer. The response body is bounded and parsed tolerantly: items without a
+/// string `id` are skipped, optional fields are best effort.
+pub fn fetchModelCatalog(
+    alloc: Allocator,
+    entry: *const custom_providers.Entry,
+    cancel_flag: *std.atomic.Value(bool),
+) ![]custom_providers.ModelEntry {
+    try validateApiType(entry);
+    const key = entry.apiKeyBytes();
+    if (key == null and !entry.keyless) return error.OpenAICompatibleCredentialRequired;
+
+    const endpoint = try modelsEndpoint(alloc, entry.base_url);
+    defer alloc.free(endpoint);
+    const uri = std.Uri.parse(endpoint) catch return error.InvalidOpenAICompatibleEndpoint;
+    if (uri.scheme.len == 0 or
+        !(std.mem.eql(u8, uri.scheme, "https") or std.mem.eql(u8, uri.scheme, "http")))
+    {
+        return error.InvalidOpenAICompatibleEndpoint;
+    }
+    const auth_header: ?[]u8 = if (key) |bytes|
+        try std.fmt.allocPrint(alloc, "Bearer {s}", .{bytes})
+    else
+        null;
+    defer if (auth_header) |header| secret.zeroAndFree(alloc, header);
+
+    var client: std.http.Client = .{ .allocator = alloc, .io = io_mod.getIo() };
+    defer client.deinit();
+    var open_operation = OpenModelsOperation{
+        .client = &client,
+        .uri = uri,
+        .auth_header = auth_header,
+    };
+    const deadline = std.Io.Clock.Timestamp.fromNow(io_mod.getIo(), .{
+        .clock = .awake,
+        .raw = .fromMilliseconds(connect_timeout_ms),
+    });
+    var opened = try gateway_client.runBoundedHttpOperation(
+        OpenedRequest,
+        alloc,
+        cancel_flag,
+        deadline,
+        &open_operation,
+    );
+    var http_request = opened.take();
+    defer http_request.deinit();
+    // A GET has no body; finalize the request head before reading the
+    // response.
+    try http_request.sendBodilessUnflushed();
+    if (http_request.connection) |connection| try connection.flush();
+
+    var response = try http_request.receiveHead(&.{});
+    if (response.head.status != .ok) return error.OpenAICompatibleModelsUnavailable;
+    var transfer_buffer: [16 * 1024]u8 = undefined;
+    const reader = response.reader(&transfer_buffer);
+    const body = reader.allocRemaining(alloc, .limited(max_models_catalog_bytes)) catch |err| switch (err) {
+        error.StreamTooLong => return error.OpenAICompatibleModelsUnavailable,
+        else => return err,
+    };
+    defer alloc.free(body);
+    return parseModelsCatalog(alloc, body);
+}
+
+/// Parses an OpenAI-style models response (`{"data":[{"id":...}]}`). Items
+/// without a string `id` or with an invalid id are skipped; an empty result
+/// is an error so a malformed or incompatible response never wipes a registry
+/// entry's model list.
+pub fn parseModelsCatalog(alloc: Allocator, bytes: []const u8) ![]custom_providers.ModelEntry {
+    var parsed = try std.json.parseFromSlice(std.json.Value, alloc, bytes, .{});
+    defer parsed.deinit();
+    if (parsed.value != .object) return error.InvalidModelsCatalogResponse;
+    const data = parsed.value.object.get("data") orelse return error.InvalidModelsCatalogResponse;
+    if (data != .array) return error.InvalidModelsCatalogResponse;
+
+    var entries: std.ArrayList(custom_providers.ModelEntry) = .empty;
+    errdefer {
+        for (entries.items) |*model| model.deinit(alloc);
+        entries.deinit(alloc);
+    }
+    for (data.array.items) |*item| {
+        if (item.* != .object) continue;
+        const id_value = item.object.get("id") orelse continue;
+        if (id_value != .string) continue;
+        validateModel(id_value.string) catch continue;
+        var model: custom_providers.ModelEntry = .{
+            .id = try alloc.dupe(u8, id_value.string),
+        };
+        if (item.object.get("context_window")) |value| {
+            if (value == .integer and value.integer >= 0 and value.integer <= std.math.maxInt(u32))
+                model.context_window = @intCast(value.integer);
+        }
+        if (item.object.get("max_output_tokens")) |value| {
+            if (value == .integer and value.integer >= 0 and value.integer <= std.math.maxInt(u32))
+                model.max_output_tokens = @intCast(value.integer);
+        }
+        if (item.object.get("reasoning")) |value| {
+            if (value == .bool) model.reasoning = value.bool;
+        }
+        if (item.object.get("vision")) |value| {
+            if (value == .bool) model.vision = value.bool;
+        }
+        if (item.object.get("file_input")) |value| {
+            if (value == .bool) model.file_input = value.bool;
+        }
+        try entries.append(alloc, model);
+    }
+    if (entries.items.len == 0) return error.InvalidModelsCatalogResponse;
+    const owned = try entries.toOwnedSlice(alloc);
+    return owned;
+}
+
 const ToolAccumulator = struct {
     index: i64,
     id: []u8,
@@ -933,6 +1080,62 @@ test "chat completions endpoint joins the API root" {
     const second = try chatCompletionsEndpoint(alloc, "http://127.0.0.1:1234/v1/");
     defer alloc.free(second);
     try std.testing.expectEqualStrings("http://127.0.0.1:1234/v1/chat/completions", second);
+}
+
+test "models endpoint joins the API root and normalizes suffixes" {
+    const alloc = std.testing.allocator;
+    const first = try modelsEndpoint(alloc, "https://opencode.ai/zen/go/v1");
+    defer alloc.free(first);
+    try std.testing.expectEqualStrings("https://opencode.ai/zen/go/v1/models", first);
+    const second = try modelsEndpoint(alloc, "http://127.0.0.1:1234/v1/");
+    defer alloc.free(second);
+    try std.testing.expectEqualStrings("http://127.0.0.1:1234/v1/models", second);
+    const third = try modelsEndpoint(alloc, "https://example.test/v1/chat/completions");
+    defer alloc.free(third);
+    try std.testing.expectEqualStrings("https://example.test/v1/models", third);
+    const fourth = try modelsEndpoint(alloc, "https://example.test/v1/models");
+    defer alloc.free(fourth);
+    try std.testing.expectEqualStrings("https://example.test/v1/models", fourth);
+}
+
+test "models catalog parse tolerates vendor shapes and skips invalid items" {
+    const alloc = std.testing.allocator;
+    const body =
+        "{\"object\":\"list\",\"data\":[" ++
+        "{\"id\":\"fast-model\",\"object\":\"model\",\"created\":1}," ++ "{\"id\":\"big-model\",\"context_window\":200000,\"max_output_tokens\":8192,\"reasoning\":true,\"vision\":true}," ++
+        "{\"object\":\"model\",\"created\":2}," ++ "{\"id\":128}," ++
+        "{\"id\":\"has space\"}" ++
+        "]}";
+    const entries = try parseModelsCatalog(alloc, body);
+    defer {
+        for (entries) |*entry| entry.deinit(alloc);
+        alloc.free(entries);
+    }
+    try std.testing.expectEqual(@as(usize, 2), entries.len);
+    try std.testing.expectEqualStrings("fast-model", entries[0].id);
+    try std.testing.expectEqual(@as(?u32, null), entries[0].context_window);
+    try std.testing.expectEqualStrings("big-model", entries[1].id);
+    try std.testing.expectEqual(@as(?u32, 200000), entries[1].context_window);
+    try std.testing.expectEqual(@as(?u32, 8192), entries[1].max_output_tokens);
+    try std.testing.expect(entries[1].reasoning);
+    try std.testing.expect(entries[1].vision);
+    try std.testing.expect(!entries[1].file_input);
+}
+
+test "models catalog parse rejects empty and malformed bodies" {
+    const alloc = std.testing.allocator;
+    try std.testing.expectError(
+        error.InvalidModelsCatalogResponse,
+        parseModelsCatalog(alloc, "{\"data\":[]}"),
+    );
+    try std.testing.expectError(
+        error.InvalidModelsCatalogResponse,
+        parseModelsCatalog(alloc, "{\"objects\":[]}"),
+    );
+    try std.testing.expectError(
+        error.SyntaxError,
+        parseModelsCatalog(alloc, "not json"),
+    );
 }
 
 test "OpenAI-compatible SSE maps content reasoning tools usage and finish" {
