@@ -90,11 +90,7 @@ export function parseSingleChildPid(output: string, parentPid: number): number {
 }
 
 function resolveWindowIndex(tmuxPrefix: string[], name: string): number {
-  const raw = execFileSync(
-    "tmux",
-    [...tmuxPrefix, "display-message", "-t", name, "-p", "#{window_index}"],
-    { stdio: "pipe", encoding: "utf-8" },
-  ).trim();
+  const raw = resolveSessionProperty(tmuxPrefix, name, "#{window_index}");
   const value = Number.parseInt(raw, 10);
   if (!Number.isInteger(value) || value < 0) {
     throw new Error(`Invalid tmux window index: ${JSON.stringify(raw)}`);
@@ -103,15 +99,43 @@ function resolveWindowIndex(tmuxPrefix: string[], name: string): number {
 }
 
 function resolvePaneId(tmuxPrefix: string[], name: string): string {
-  const raw = execFileSync(
-    "tmux",
-    [...tmuxPrefix, "display-message", "-t", name, "-p", "#{pane_id}"],
-    { stdio: "pipe", encoding: "utf-8" },
-  ).trim();
+  const raw = resolveSessionProperty(tmuxPrefix, name, "#{pane_id}");
   if (!raw.startsWith("%")) {
     throw new Error(`Invalid tmux pane id: ${JSON.stringify(raw)}`);
   }
   return raw;
+}
+
+/**
+ * Reads a display-message property from a just-created session. A brand-new
+ * tmux server may briefly refuse display-message on heavily loaded runners,
+ * so the query retries briefly before failing.
+ */
+function resolveSessionProperty(
+  tmuxPrefix: string[],
+  name: string,
+  property: string,
+): string {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    try {
+      return execFileSync(
+        "tmux",
+        [...tmuxPrefix, "display-message", "-t", name, "-p", property],
+        { stdio: "pipe", encoding: "utf-8" },
+      ).trim();
+    } catch (err) {
+      lastError = err;
+    }
+    if (attempt + 1 < 8) {
+      try {
+        execFileSync("sleep", ["0.25"], { stdio: "pipe" });
+      } catch {}
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`Could not resolve tmux ${property} for ${name}`);
 }
 
 export function buildObservedCommand(
