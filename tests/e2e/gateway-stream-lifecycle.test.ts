@@ -3039,12 +3039,12 @@ describe("gateway stream lifecycle", () => {
   }, 20_000);
 
   test.skipIf(process.platform !== "linux")(
-    "a second headless terminal exec survives replacing the running fx binary",
+    "a second headless terminal exec survives replacing the running ax binary",
     async () => {
       const root = createFixtureRoot("headless-reexec-after-rebuild");
       const tracePath = join(root.root, "trace.log");
       const liveBin = join(root.root, "fx");
-      const replacementBin = join(root.root, "fx.next");
+      const replacementBin = join(root.root, "ax.next");
       const parentExePath = join(root.root, "parent-exe.txt");
       const firstHelperPidPath = join(root.root, "first-helper.pid");
       const secondHelperPidPath = join(root.root, "second-helper.pid");
@@ -3062,7 +3062,7 @@ describe("gateway stream lifecycle", () => {
         switch (responseIndex++) {
           case 0:
             if (fxPid === null) {
-              return new Response("fx pid unavailable", { status: 500 });
+              return new Response("ax pid unavailable", { status: 500 });
             }
             return fakeGatewayToolCall(firstCallId, "terminal", {
               action: "exec",

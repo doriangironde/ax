@@ -1117,11 +1117,16 @@ fn configuredProviderSelection(
     settings: *const config_runtime.Settings,
 ) !model_provider.ProviderSelection {
     const provider = settings.provider orelse .gateway;
-    const model = settings.models.get(provider) orelse switch (provider) {
+    // Pre-v0.0.6 fork profiles stored the custom provider's model in the
+    // legacy shared `model` key, which the loader maps to the gateway slot;
+    // migrate on read.
+    const model = settings.models.get(provider) orelse if (provider == .custom)
+        settings.models.get(.gateway) orelse return error.CustomProviderModelNotSelected
+    else switch (provider) {
         .gateway => default_model,
         .codex => return error.CodexModelNotSelected,
         .grok => return error.GrokModelNotSelected,
-        .custom => return error.CustomProviderModelNotSelected,
+        .custom => unreachable,
     };
     return .{
         .provider = provider,
@@ -1166,17 +1171,18 @@ test "startup provider chooses only its provider-scoped model" {
     try std.testing.expectEqual(model_provider.ProviderId.grok, grok.provider);
     try std.testing.expectEqualStrings("grok-model", grok.model);
 
-    const custom_settings = config_runtime.Settings{
+    var custom_settings = config_runtime.Settings{
         .provider = .custom,
-        .model = @constCast("glm-4.6"),
         .custom_provider = @constCast("opencode-go"),
     };
+    custom_settings.models.values[@intFromEnum(model_provider.ProviderId.custom)] = @constCast("glm-4.6");
     const custom = try configuredProviderSelection("default/model", &custom_settings);
     try std.testing.expectEqual(model_provider.ProviderId.custom, custom.provider);
     try std.testing.expectEqualStrings("glm-4.6", custom.model);
     try std.testing.expectEqualStrings("opencode-go", custom.custom_provider.?);
 
-    const missing_custom_name = config_runtime.Settings{ .provider = .custom, .model = @constCast("glm-4.6") };
+    var missing_custom_name = config_runtime.Settings{ .provider = .custom };
+    missing_custom_name.models.values[@intFromEnum(model_provider.ProviderId.custom)] = @constCast("glm-4.6");
     try std.testing.expectError(
         error.CustomProviderNameNotSelected,
         configuredProviderSelection("default/model", &missing_custom_name),

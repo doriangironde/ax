@@ -152,7 +152,7 @@ fn formatMcpIssuerMismatch(
             try out.writer.writeAll(" but the authorization response returned issuer ");
             try std.json.Stringify.value(returned.bytes, .{}, &out.writer);
             try out.writer.writeAll(
-                ". fx stopped before token exchange. Contact the MCP server provider; changing oauth.issuer is not a safe workaround.",
+                ". ax stopped before token exchange. Contact the MCP server provider; changing oauth.issuer is not a safe workaround.",
             );
         },
     }

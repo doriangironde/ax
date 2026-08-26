@@ -73,6 +73,7 @@ pub fn signInCompletion(
             .{ .switch_provider = .grok }
         else
             .{ .activate_source = .grok_subscription },
+        .custom => .{ .activate_source = .custom_provider },
     };
 }
 

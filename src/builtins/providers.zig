@@ -60,9 +60,8 @@ test "custom provider bundles route from a registered entry" {
         .provider_name = "local",
     };
     const bundle = customBundle(entry, &context);
-    try std.testing.expect(!bundle.agent_stream.?.observes_gateway_usage);
     try std.testing.expect(bundle.agent_stream.?.context != null);
-    try std.testing.expect(bundle.agent_stream.?.build_fn != stream_provider.unavailable_provider.build_fn);
+    try std.testing.expect(bundle.agent_stream.?.stream_fn != stream_provider.unavailable_provider.stream_fn);
     try std.testing.expect(bundle.model_catalog != null);
     try std.testing.expect(bundle.permission_reviewer == null);
 }

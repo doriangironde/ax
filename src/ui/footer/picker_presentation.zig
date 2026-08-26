@@ -78,6 +78,7 @@ fn setupChoiceLabel(view: auth_runtime.PickerView, choice: auth_runtime.Choice) 
                 .login, .chatgpt_login, .grok_login, .setup, .automatic => "",
             },
             .provider, .source, .team => "",
+            .custom_provider, .custom_provider_preset => view.choiceLabel(choice),
         },
         .connections => switch (choice) {
             .action => |action| switch (action) {
@@ -87,7 +88,7 @@ fn setupChoiceLabel(view: auth_runtime.PickerView, choice: auth_runtime.Choice) 
                 .setup => "AI Gateway API key",
                 .connections, .change_team, .switch_credential, .switch_provider, .automatic => "",
             },
-            .provider, .source, .team => "",
+            .provider, .custom_provider, .custom_provider_preset, .source, .team => "",
         },
         .provider, .change_team, .switch_credential => view.choiceLabel(choice),
         .sign_in, .api_key => "",
@@ -113,6 +114,7 @@ fn setupChoiceValue(view: auth_runtime.PickerView, choice: auth_runtime.Choice) 
                 .login, .chatgpt_login, .grok_login, .setup, .automatic => "",
             },
             .provider, .source, .team => "",
+            .custom_provider, .custom_provider_preset => view.choiceLabel(choice),
         },
         .connections => switch (choice) {
             .action => |action| switch (action) {
@@ -128,6 +130,7 @@ fn setupChoiceValue(view: auth_runtime.PickerView, choice: auth_runtime.Choice) 
                 .connections, .change_team, .switch_credential, .switch_provider, .automatic => "",
             },
             .provider, .source, .team => "",
+            .custom_provider, .custom_provider_preset => "",
         },
         .provider, .change_team, .switch_credential => view.choiceDescription(choice),
         .sign_in, .api_key => "",

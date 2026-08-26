@@ -90,7 +90,7 @@ ax can run against any OpenAI-compatible endpoint. Register providers in `~/.fx/
 
 `base_url` is the API root; ax requests `<base_url>/chat/completions`. Keys resolve from `api_key_env` (recommended) or inline `api_key`. Each model entry may declare `context_window`, `max_output_tokens`, `reasoning`, `vision`, and `file_input`. Endpoints without a key or with no models cannot be selected.
 
-Select a registered provider with `ax provider <name>` (for example `ax provider opencode-go`). Inside ax, run `/login`: the menu lists the built-in sign-in ways followed by every registered custom provider and unregistered preset, so a direct pickup needs no extra step — choosing a preset registers it first, and a provider without a key asks for one inline. List its models with `ax models`, and switch back to the built-in providers with `ax provider gateway|codex|grok`. The full list (built-ins included) stays available under **Switch provider** in the same menu.
+Select a registered provider with `ax provider <name>` (for example `ax provider opencode-go`). Inside ax, run `/login`: the setup hub lists Connections, Model provider, Vercel team, and Credential source; **Model provider** opens the provider stage with the built-in routes followed by every registered custom provider and unregistered preset, so a direct pickup needs no extra step — choosing a preset registers it first, and a provider without a key asks for one inline. List its models with `ax models`, and switch back to the built-in providers with `ax provider gateway|codex|grok`.
 
 ### Built-in presets
 
@@ -102,7 +102,7 @@ ax provider deepseek          # registers deepseek
 ax provider ollama            # keyless local server; selected directly
 ```
 
-Run `ax provider` with no arguments to list the built-ins, registered custom providers, and available presets; `ax provider <preset>` registers and activates. Presets also appear directly on the `/login` menu (no description until picked, then join the registered list) and in the **Switch provider** list. Display names such as OpenCode Go, OpenRouter, or Ollama come from the catalog; registered names that are not presets keep their own identifier. Available presets: `opencode-go`, `openrouter`, `groq`, `deepseek`, `ollama`, `together`, `mistral`, `cerebras`, `xai`, `gemini`, `perplexity`, and `moonshot`.
+Run `ax provider` with no arguments to list the built-ins, registered custom providers, and available presets; `ax provider <preset>` registers and activates. Presets also appear in the `/login` **Model provider** stage (no description until picked, then join the registered list). Display names such as OpenCode Go, OpenRouter, or Ollama come from the catalog; registered names that are not presets keep their own identifier. Available presets: `opencode-go`, `openrouter`, `groq`, `deepseek`, `ollama`, `together`, `mistral`, `cerebras`, `xai`, `gemini`, `perplexity`, and `moonshot`.
 
 Each preset registers a default `api_key_env` (for example `OPENROUTER_API_KEY`); export that variable or paste a key inline when prompted. Keyless presets such as `ollama` send no `Authorization` header at all. A registered preset is an ordinary entry in `providers.json` and stays editable there; presets are starting points, never hidden state.
 
@@ -187,6 +187,7 @@ Run the test suite with `zig build test`. See [CONTRIBUTING.md](CONTRIBUTING.md)
 - MCP/context wire identity stays `fx` by design: the `io.modelcontextprotocol/clientInfo` name, the `_meta.fx.continueRecovery` marker, and the `<fx-turn-context>` prompt section are asserted by the conformance fixtures, which reject any other value. Do not sweep them (see FORK_GAPS.md G9).
 - Upstream release machinery (`release.yml`, `dev-release.yml`, `pgso-macos-arm64.yml`) is rebrand-consistent: the release tarballs ship the `ax` binary, and the PGSO pipeline tolerates the renamed product executable (control stage adopts the installed binary). `fx-pgso-*` runner-temp names remain as pipeline self-naming.
 - CI status: the push `CI` and `Benchmarks` workflows are green on `main`, and the four-runner `Full CI` (native checks + 16 E2E shards) passes on the `ci-verify` branch. The `Release` lane runs the full PGSO qualification on every push until the fork gets its first release tag; `Dev Release` and `Publish libfx` no-op until a tag exists.
+- Upstream tracking: the fork tracks upstream releases; v0.0.6 was merged as the current base (custom providers, presets, and the fork identity are re-applied on top). The `/login` picker follows the upstream setup-hub layout: Connections for sign-in ways, and the Model provider stage carries the built-in, custom, and preset routes.
 
 ## License
 

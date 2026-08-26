@@ -26,6 +26,10 @@ pub fn parse(value: []const u8) ?ProviderId {
     return null;
 }
 
+pub fn usesGatewayAuxiliaries(provider: ProviderId) bool {
+    return provider == .gateway;
+}
+
 pub fn authorizesCredential(provider: ProviderId, source: ?types.CredentialSource) bool {
     const selected = source orelse return false;
     return switch (provider) {

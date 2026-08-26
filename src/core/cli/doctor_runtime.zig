@@ -123,7 +123,15 @@ pub fn collect(
     try appendMcpConfigCheck(&checks, alloc, mcp_config_diagnostic);
     try appendAuthCheck(&checks, alloc, snapshot.auth);
     try appendResolvedStartupCheck(&snapshot, &checks, alloc, .{
-        .model = if (detailed.settings.models.get(snapshot.provider)) |model| @constCast(model) else null,
+        // Pre-v0.0.6 fork profiles stored the custom provider's model in the
+        // legacy shared `model` key (mapped to the gateway slot); migrate on
+        // read.
+        .model = if (detailed.settings.models.get(snapshot.provider)) |model|
+            @constCast(model)
+        else if (snapshot.provider == .custom)
+            if (detailed.settings.models.get(.gateway)) |model| @constCast(model) else null
+        else
+            null,
         .permission_mode = detailed.settings.permission_mode,
         .max_agent_steps = detailed.settings.max_agent_steps,
     }, default_model, default_agent_step_limit);

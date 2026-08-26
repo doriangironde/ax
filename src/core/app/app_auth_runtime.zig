@@ -866,7 +866,10 @@ pub fn Runtime(comptime App: type) type {
                 return;
             };
             defer settings.deinit(app.alloc);
-            const saved_model = settings.model;
+            // Pre-v0.0.6 fork profiles stored the custom provider's model in
+            // the legacy shared `model` key (mapped to the gateway slot);
+            // migrate on read.
+            const saved_model = settings.models.get(.custom) orelse settings.models.get(.gateway);
             const preferred_model = io_mod.getenv("FX_MODEL") orelse saved_model;
 
             var owned_catalog: std.ArrayList(model_catalog.ModelCatalogEntry) = .empty;
@@ -1846,6 +1849,20 @@ const TestAuth = struct {
         self.picker_provider = provider;
     }
 
+    fn openPicker(self: *TestAuth, alloc: std.mem.Allocator) void {
+        self.openPickerForProvider(alloc, .gateway);
+    }
+
+    fn openPickerWithActiveProvider(
+        self: *TestAuth,
+        _: std.mem.Allocator,
+        provider: model_provider.ProviderId,
+        _: []const u8,
+    ) void {
+        self.picker_opened = true;
+        self.picker_provider = provider;
+    }
+
     fn teamSelection(self: *TestAuth) ?*TestTeamSelection {
         return &self.team_selection;
     }
@@ -1933,6 +1950,7 @@ const TestUrlOpener = struct {
 const TestApp = struct {
     alloc: std.mem.Allocator = std.testing.allocator,
     selected_provider: model_provider.ProviderId = .gateway,
+    selected_model: []const u8 = "",
     auth: TestAuth = .{},
     model_cache: TestModelCache = .{},
     session: struct {

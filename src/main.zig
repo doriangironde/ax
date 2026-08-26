@@ -427,13 +427,13 @@ const App = struct {
             host.unavailable_url_opener;
     }
 
-    pub fn creditsProvider(self: *const Self) gateway_provider.CreditsProvider {
+    pub fn creditsProvider(self: *Self) gateway_provider.CreditsProvider {
         return self.providerSet()
             .select(self.provider_selection.selection().provider)
             .credits orelse gateway_provider.unavailable_credits_provider;
     }
 
-    pub fn agentStreamProvider(self: *const Self) agent_stream_provider.Provider {
+    pub fn agentStreamProvider(self: *Self) agent_stream_provider.Provider {
         return self.providerSet()
             .select(self.provider_selection.selection().provider)
             .agent_stream_or_unavailable();
@@ -505,7 +505,7 @@ const App = struct {
         // catalog fetches on a worker thread, so it has to point at the app
         // field, not a stack local.
         const context_ptr: *const custom_providers.StaticCatalogContext = &(self.custom_catalog_context orelse return null);
-        return builtin_providers.modelCatalogForCustom(context_ptr);
+        return custom_providers.staticCatalogProvider(context_ptr);
     }
 
     pub fn fetchProviderCatalog(
@@ -516,7 +516,6 @@ const App = struct {
         const catalog = self.providerSet().select(provider).model_catalog orelse
             return error.ModelCatalogUnavailable;
         return catalog.fetch(self.alloc, .{
-
             .access = access,
             .endpoint = builtin_gateway.models_path,
             .cancel_flag = &self.worker.worker_cancel_requested,
@@ -1675,14 +1674,13 @@ const App = struct {
         try self.permission_engine.allow(self.alloc, tool_name, target_path);
     }
 
-    pub fn permissionReviewerProvider(self: *const App) ?permission_auto_classifier.Provider {
+    pub fn permissionReviewerProvider(self: *App) ?permission_auto_classifier.Provider {
         return self.providerSet()
-
             .select(self.provider_selection.selection().provider)
             .permission_reviewer;
     }
 
-    pub fn providerSet(self: *const App) provider_set.Set {
+    pub fn providerSet(self: *App) provider_set.Set {
         if (comptime host_target.is_wasm) {
             return provider_set.gateway_only(.{
                 .capabilities = .{

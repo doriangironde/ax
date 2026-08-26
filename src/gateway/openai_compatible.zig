@@ -3,6 +3,7 @@ const custom_providers = @import("../core/config/custom_providers.zig");
 const image_attachments = @import("../core/images/image_attachments.zig");
 const secret = @import("../core/auth/secret.zig");
 const stream_provider = @import("../core/agent/stream_provider.zig");
+const model_tool_schema = @import("../core/tooling/model_tool_schema.zig");
 const io_mod = @import("../core/shared/io.zig");
 const types = @import("../core/shared/types.zig");
 const gateway_client = @import("client.zig");
@@ -32,8 +33,6 @@ const Limits = struct {
 pub fn provider(entry: *const custom_providers.Entry) stream_provider.Provider {
     return .{
         .context = @constCast(entry),
-        .observes_gateway_usage = false,
-        .build_fn = buildRequest,
         .stream_fn = streamCompletion,
     };
 }
@@ -64,12 +63,9 @@ fn validateReplayMessage(message: types.ChatMessage, limits: Limits) !void {
 }
 
 pub fn buildRequest(
-    context: ?*anyopaque,
     alloc: Allocator,
-    request: stream_provider.BuildRequest,
+    request: stream_provider.RequestData,
 ) ![]u8 {
-    const entry = entryFor(context);
-    try validateApiType(entry);
     try validateModel(request.model);
     if (request.budget) |budget| {
         if (budget.cancel_flag) |flag| if (flag.load(.seq_cst)) return error.Cancelled;
@@ -85,7 +81,7 @@ pub fn buildRequest(
     try writeMessages(writer, alloc, request.messages, request.verified_images);
     try writer.writeByte(']');
 
-    const tool_count = try writeTools(writer, alloc, request.serialized_tools, request.selected_dynamic_tool_schemas);
+    const tool_count = try writeTools(writer, alloc, request.tools);
     if (tool_count > 0) {
         try writer.writeAll(",\"tool_choice\":");
         try std.json.Stringify.value(request.tool_choice.label(), .{}, writer);
@@ -100,15 +96,13 @@ pub fn buildRequest(
         try std.json.Stringify.value(tokens, .{}, writer);
     }
     if (request.response_format) |format| {
-        var schema = try std.json.parseFromSlice(std.json.Value, alloc, format.schema_json, .{});
-        defer schema.deinit();
-        if (schema.value != .object) return error.InvalidStructuredResponseSchema;
+        if (format.schema != .object) return error.InvalidStructuredResponseSchema;
         try writer.writeAll(",\"response_format\":{\"type\":\"json_schema\",\"json_schema\":{\"name\":");
         try std.json.Stringify.value(format.name, .{}, writer);
         try writer.writeAll(",\"description\":");
         try std.json.Stringify.value(format.description, .{}, writer);
         try writer.writeAll(",\"schema\":");
-        try std.json.Stringify.value(schema.value, .{}, writer);
+        try std.json.Stringify.value(format.schema, .{}, writer);
         try writer.writeAll(",\"strict\":true}}");
     }
     try writer.writeByte('}');
@@ -215,58 +209,68 @@ fn writeImage(writer: *std.Io.Writer, alloc: Allocator, image: image_attachments
 fn writeTools(
     writer: *std.Io.Writer,
     alloc: Allocator,
-    serialized_tools: []const u8,
-    selected_dynamic_schemas: []const []const u8,
+    tools: stream_provider.ToolSelection,
 ) !usize {
     var count: usize = 0;
-    var parsed = std.json.parseFromSlice(std.json.Value, alloc, serialized_tools, .{}) catch |err| switch (err) {
-        error.OutOfMemory => return error.OutOfMemory,
-        else => return error.InvalidToolSchema,
-    };
-    defer parsed.deinit();
-    if (parsed.value != .array) return error.InvalidToolSchema;
-
     var tools_out: std.Io.Writer.Allocating = .init(alloc);
     defer tools_out.deinit();
     try tools_out.writer.writeAll(",\"tools\":[");
-    for (parsed.value.array.items) |tool| {
-        if (try writeFunctionTool(&tools_out.writer, tool, count != 0)) count += 1;
+    for (tools.advertised_names) |name| {
+        const tool = tools.advertisedFunction(name) orelse continue;
+        if (try writeFunctionTool(&tools_out.writer, alloc, tool.name, tool.description, .{ .static = tool.input_schema }, count != 0)) count += 1;
     }
-    for (selected_dynamic_schemas) |schema_json| {
-        var selected = std.json.parseFromSlice(std.json.Value, alloc, schema_json, .{}) catch |err| switch (err) {
-            error.OutOfMemory => return error.OutOfMemory,
-            else => return error.InvalidToolSchema,
-        };
-        defer selected.deinit();
-        if (try writeFunctionTool(&tools_out.writer, selected.value, count != 0)) count += 1;
+    for (tools.additional_functions) |tool| {
+        if (containsName(tools.advertised_names, tool.name)) continue;
+        if (try writeFunctionTool(&tools_out.writer, alloc, tool.name, tool.description, .{ .static = tool.input_schema }, count != 0)) count += 1;
+    }
+    for (tools.selected_dynamic) |tool| {
+        if (containsName(tools.advertised_names, tool.name)) continue;
+        if (try writeFunctionTool(&tools_out.writer, alloc, tool.name, tool.description, .{ .dynamic = tool.input_schema }, count != 0)) count += 1;
     }
     try tools_out.writer.writeByte(']');
     if (count > 0) try writer.writeAll(tools_out.written());
     return count;
 }
 
-fn writeFunctionTool(writer: *std.Io.Writer, value: std.json.Value, comma: bool) !bool {
-    if (value != .object) return false;
-    const kind = value.object.get("type") orelse return false;
-    if (kind != .string or !std.mem.eql(u8, kind.string, "function")) return false;
-    const name = value.object.get("name") orelse return false;
-    if (name != .string or name.string.len == 0) return false;
-    const parameters = value.object.get("inputSchema") orelse value.object.get("parameters") orelse return false;
-    if (parameters != .object) return false;
+const InputSchema = union(enum) {
+    static: model_tool_schema.ObjectSchema,
+    dynamic: std.json.Value,
+};
+
+fn writeFunctionTool(
+    writer: *std.Io.Writer,
+    alloc: Allocator,
+    name: []const u8,
+    description: []const u8,
+    input_schema: InputSchema,
+    comma: bool,
+) !bool {
+    if (name.len == 0) return false;
     // The OpenAI-compatible contract nests the tool definition under
     // `function`; strict servers (OpenCode Go, OpenRouter) reject flattened
     // tool objects.
     if (comma) try writer.writeByte(',');
     try writer.writeAll("{\"type\":\"function\",\"function\":{\"name\":");
-    try std.json.Stringify.value(name.string, .{}, writer);
-    if (value.object.get("description")) |description| if (description == .string) {
+    try std.json.Stringify.value(name, .{}, writer);
+    if (description.len > 0) {
         try writer.writeAll(",\"description\":");
-        try std.json.Stringify.value(description.string, .{}, writer);
-    };
+        try std.json.Stringify.value(description, .{}, writer);
+    }
     try writer.writeAll(",\"parameters\":");
-    try std.json.Stringify.value(parameters, .{}, writer);
+    switch (input_schema) {
+        .static => |schema| try model_tool_schema.writeObjectSchema(alloc, writer, schema),
+        .dynamic => |schema| {
+            if (schema != .object) return error.InvalidToolSchema;
+            try std.json.Stringify.value(schema, .{}, writer);
+        },
+    }
     try writer.writeAll(",\"strict\":false}}");
     return true;
+}
+
+fn containsName(names: []const []const u8, expected: []const u8) bool {
+    for (names) |name| if (std.mem.eql(u8, name, expected)) return true;
+    return false;
 }
 
 fn writeComma(writer: *std.Io.Writer, first: *bool) !void {
@@ -277,9 +281,9 @@ fn writeComma(writer: *std.Io.Writer, first: *bool) !void {
 fn streamCompletion(
     context: ?*anyopaque,
     alloc: Allocator,
-    request: stream_provider.Request,
+    request: stream_provider.ModelRequest,
 ) !stream_provider.Result {
-    return streamCompletionCore(context, alloc, request) catch |err| {
+    return streamCompletionCore(alloc, context, request) catch |err| {
         if (request.cancel_flag.load(.seq_cst)) return error.Cancelled;
         request.attempt_evidence.network_failure = gateway_client.networkFailureEvidence(err, request.delivery.load());
         return err;
@@ -322,15 +326,18 @@ const OpenRequestOperation = struct {
 };
 
 fn streamCompletionCore(
-    context: ?*anyopaque,
     alloc: Allocator,
-    request: stream_provider.Request,
+    context: ?*anyopaque,
+    request: stream_provider.ModelRequest,
 ) !stream_provider.Result {
     if (request.cancel_flag.load(.seq_cst)) return error.Cancelled;
     const entry = entryFor(context);
     try validateApiType(entry);
     try validateModel(request.model);
-    if (request.api_key.len == 0 and !entry.keyless) return error.OpenAICompatibleCredentialRequired;
+    if (request.credential.secret.len == 0 and !entry.keyless) return error.OpenAICompatibleCredentialRequired;
+
+    const payload = try buildRequest(alloc, request.data());
+    defer alloc.free(payload);
 
     const endpoint = try chatCompletionsEndpoint(alloc, entry.base_url);
     defer alloc.free(endpoint);
@@ -341,8 +348,8 @@ fn streamCompletionCore(
         return error.InvalidOpenAICompatibleEndpoint;
     }
     // A keyless entry sends no Authorization header at all.
-    const auth_header: ?[]u8 = if (request.api_key.len > 0)
-        try std.fmt.allocPrint(alloc, "Bearer {s}", .{request.api_key})
+    const auth_header: ?[]u8 = if (request.credential.secret.len > 0)
+        try std.fmt.allocPrint(alloc, "Bearer {s}", .{request.credential.secret})
     else
         null;
     defer if (auth_header) |header| secret.zeroAndFree(alloc, header);
@@ -358,6 +365,7 @@ fn streamCompletionCore(
         .clock = .awake,
         .raw = .fromMilliseconds(connect_timeout_ms),
     });
+    try request.admission.admit();
     var opened = try gateway_client.runBoundedHttpOperation(
         OpenedRequest,
         alloc,
@@ -382,11 +390,11 @@ fn streamCompletionCore(
     }
     if (request.cancel_flag.load(.seq_cst)) return error.Cancelled;
 
-    http_request.transfer_encoding = .{ .content_length = request.payload.len };
+    http_request.transfer_encoding = .{ .content_length = payload.len };
     var send_buffer: [8192]u8 = undefined;
     request.delivery.markPossiblySent();
     var body_writer = try http_request.sendBodyUnflushed(&send_buffer);
-    try body_writer.writer.writeAll(request.payload);
+    try body_writer.writer.writeAll(payload);
     try body_writer.end();
     if (http_request.connection) |connection| try connection.flush();
     if (request.cancel_flag.load(.seq_cst)) return error.Cancelled;
@@ -399,34 +407,71 @@ fn streamCompletionCore(
             error.StreamTooLong => try alloc.dupe(u8, "OpenAI-compatible error response exceeded the local limit"),
             else => return err,
         };
-        return .{
-            .status = response.head.status,
-            .err_body = body,
+        return .{ .failed = .{
+            .kind = failureKind(response.head.status),
+            .detail = body,
             .ownership = .owned,
-        };
+        } };
     }
 
     var transfer_buffer: [transfer_buffer_bytes]u8 = undefined;
     const reader = response.reader(&transfer_buffer);
+    var events = request.events;
     const completion = try consumeSse(
         alloc,
         reader,
-        request.callback_ctx,
-        request.on_content_chunk,
-        request.on_tool_start,
-        request.on_reasoning_chunk,
-        request.on_tool_input_chunk,
+        &events,
+        EventBridge.content,
+        EventBridge.toolStart,
+        EventBridge.reasoning,
+        EventBridge.toolInput,
         request.cancel_flag,
         request.content_capture_limit,
         .{},
     );
-    return .{
-        .status = .ok,
+    return .{ .completed = .{
         .completion = completion,
-        .generation_origin = entry.base_url,
+        .usage = .{ .immediate = null },
         .ownership = .owned,
+    } };
+}
+
+fn failureKind(status: std.http.Status) stream_provider.FailureKind {
+    return switch (status) {
+        .bad_request => .invalid_request,
+        .unauthorized => .unauthorized,
+        .forbidden => .forbidden,
+        .payload_too_large => .request_too_large,
+        .too_many_requests => .rate_limited,
+        .internal_server_error => .server_error,
+        .bad_gateway => .bad_gateway,
+        .service_unavailable => .unavailable,
+        .gateway_timeout => .gateway_timeout,
+        else => .provider_error,
     };
 }
+
+const EventBridge = struct {
+    fn sink(raw: *anyopaque) *stream_provider.EventSink {
+        return @ptrCast(@alignCast(raw));
+    }
+
+    fn content(raw: *anyopaque, chunk: []const u8) void {
+        sink(raw).emit(.{ .content_delta = chunk });
+    }
+
+    fn reasoning(raw: *anyopaque, chunk: []const u8) void {
+        sink(raw).emit(.{ .reasoning_delta = chunk });
+    }
+
+    fn toolInput(raw: *anyopaque, chunk: []const u8) void {
+        sink(raw).emit(.{ .tool_input_delta = chunk });
+    }
+
+    fn toolStart(raw: *anyopaque, id: []const u8, name: []const u8, label: ?[]const u8) void {
+        sink(raw).emit(.{ .tool_started = .{ .id = id, .name = name, .label = label } });
+    }
+};
 
 /// The chat-completions request path for an OpenAI-compatible API root.
 pub fn chatCompletionsEndpoint(alloc: Allocator, base_url: []const u8) ![]u8 {
@@ -520,7 +565,7 @@ fn consumeSse(
     cancel_flag: *std.atomic.Value(bool),
     content_capture_limit: ?usize,
     limits: Limits,
-) !types.GatewayCompletion {
+) !types.ModelCompletion {
     var content: std.ArrayList(u8) = .empty;
     errdefer content.deinit(alloc);
     var tools: std.ArrayList(ToolAccumulator) = .empty;
@@ -756,7 +801,6 @@ test "OpenAI-compatible request builds chat messages with tools and options" {
             "\"models\":[{\"id\":\"local-model\"}]}]}",
     );
     defer registry.deinit(alloc);
-    const stream = provider(&registry.entries.items[0]);
     const messages = [_]types.ChatMessage{
         .{ .role = .system, .content = "Be concise." },
         .{ .role = .user, .content = "Read it." },
@@ -766,9 +810,18 @@ test "OpenAI-compatible request builds chat messages with tools and options" {
         },
         .{ .role = .tool, .tool_call_id = "call_1", .tool_name = "read_file", .content = "contents" },
     };
-    const body = try stream.build(alloc, .{
+    const read_schema = try std.json.parseFromSlice(std.json.Value, alloc, "{\"type\":\"object\"}", .{});
+    defer read_schema.deinit();
+    const response_schema = try std.json.parseFromSlice(
+        std.json.Value,
+        alloc,
+        "{\"type\":\"object\",\"properties\":{\"ok\":{\"type\":\"boolean\"}}}",
+        .{},
+    );
+    defer response_schema.deinit();
+    const body = try buildRequest(alloc, .{
         .model = "local-model",
-        .serialized_tools = "[{\"type\":\"function\",\"name\":\"read_file\",\"description\":\"Read\",\"inputSchema\":{\"type\":\"object\"}}]",
+        .tools = .{ .selected_dynamic = &.{.{ .name = "read_file", .description = "Read", .input_schema = read_schema.value }} },
         .messages = &messages,
         .tool_choice = .auto,
         .provider_options = .{ .reasoning = types.ReasoningEffort.literal("high") },
@@ -776,7 +829,7 @@ test "OpenAI-compatible request builds chat messages with tools and options" {
         .response_format = .{
             .name = "answer",
             .description = "The answer",
-            .schema_json = "{\"type\":\"object\",\"properties\":{\"ok\":{\"type\":\"boolean\"}}}",
+            .schema = response_schema.value,
         },
     });
     defer alloc.free(body);
@@ -805,11 +858,10 @@ test "OpenAI-compatible request omits optional controls when unset" {
             "\"models\":[{\"id\":\"m\"}]}]}",
     );
     defer registry.deinit(alloc);
-    const stream = provider(&registry.entries.items[0]);
     const messages = [_]types.ChatMessage{.{ .role = .user, .content = "Hi" }};
-    const body = try stream.build(alloc, .{
+    const body = try buildRequest(alloc, .{
         .model = "m",
-        .serialized_tools = "[]",
+        .tools = .{},
         .messages = &messages,
         .tool_choice = .none,
         .provider_options = .{},
@@ -830,15 +882,14 @@ test "OpenAI-compatible request serializes verified images into the last user me
             "\"models\":[{\"id\":\"m\"}]}]}",
     );
     defer registry.deinit(alloc);
-    const stream = provider(&registry.entries.items[0]);
     const messages = [_]types.ChatMessage{.{ .role = .user, .content = "Describe it." }};
     const images = [_]image_attachments.VerifiedSnapshot{.{
         .bytes = @constCast(&[_]u8{ 1, 2, 3, 4 }),
         .media_type = "image/png",
     }};
-    const body = try stream.build(alloc, .{
+    const body = try buildRequest(alloc, .{
         .model = "m",
-        .serialized_tools = "[]",
+        .tools = .{},
         .messages = &messages,
         .tool_choice = .none,
         .provider_options = .{},
@@ -861,13 +912,12 @@ test "OpenAI-compatible build rejects empty models" {
             "\"models\":[{\"id\":\"m\"}]}]}",
     );
     defer registry.deinit(alloc);
-    const stream = provider(&registry.entries.items[0]);
     const messages = [_]types.ChatMessage{.{ .role = .user, .content = "Hi" }};
     try std.testing.expectError(
         error.InvalidOpenAICompatibleModel,
-        stream.build(alloc, .{
+        buildRequest(alloc, .{
             .model = "",
-            .serialized_tools = "[]",
+            .tools = .{},
             .messages = &messages,
             .tool_choice = .none,
             .provider_options = .{},
@@ -1049,7 +1099,7 @@ test "OpenAI-compatible SSE requires at least one event" {
     );
 }
 
-fn consumeOpenAICompatibleTestSse(sse_text: []const u8, limits: Limits) !types.GatewayCompletion {
+fn consumeOpenAICompatibleTestSse(sse_text: []const u8, limits: Limits) !types.ModelCompletion {
     const alloc = std.testing.allocator;
     var reader: std.Io.Reader = .fixed(sse_text);
     var cancelled = std.atomic.Value(bool).init(false);
@@ -1070,7 +1120,7 @@ fn consumeOpenAICompatibleTestSse(sse_text: []const u8, limits: Limits) !types.G
     );
 }
 
-fn freeOpenAICompatibleTestCompletion(completion: types.GatewayCompletion) void {
+fn freeOpenAICompatibleTestCompletion(completion: types.ModelCompletion) void {
     if (completion.content) |value| std.testing.allocator.free(@constCast(value));
     types.freeToolCallSlice(std.testing.allocator, @constCast(completion.tool_calls));
     if (completion.generation_id) |value| std.testing.allocator.free(@constCast(value));
@@ -1151,31 +1201,36 @@ test "provider rejects a missing credential before network I/O" {
     var delivery = stream_provider.DeliveryCertainty.init();
     var evidence: stream_provider.AttemptEvidence = .{};
     var callback_context: u8 = 0;
+    const events = stream_provider.EventSink{
+        .context = &callback_context,
+        .emit_fn = EventBridgeIgnore.emit,
+    };
+    const messages = [_]types.ChatMessage{.{ .role = .user, .content = "Hi" }};
     try std.testing.expectError(
         error.OpenAICompatibleCredentialRequired,
         provider(&registry.entries.items[0]).stream(alloc, .{
-            .api_key = "",
-            .credential_source = .custom_provider,
-            .team = null,
+            .credential = .{ .secret = "", .source = .custom_provider },
             .model = "m",
             .retry_count = 1,
-            .chat_url = "",
-            .payload = "{}",
+            .messages = &messages,
+            .tool_choice = .auto,
+            .provider_options = .{},
             .trace_ctx = .{},
             .content_capture_limit = null,
             .delivery = &delivery,
             .attempt_evidence = &evidence,
-            .callback_ctx = @ptrCast(&callback_context),
-            .on_content_chunk = struct {
-                fn ignore(_: *anyopaque, _: []const u8) void {}
-            }.ignore,
-            .on_tool_start = null,
-            .on_reasoning_chunk = null,
+            .events = events,
             .cancel_flag = &cancelled,
         }),
     );
     try std.testing.expectEqual(stream_provider.DeliveryCertainty.State.definitely_unsent, delivery.load());
 }
+
+const EventBridgeIgnore = struct {
+    fn emit(_: *anyopaque, _: stream_provider.Event) void {}
+
+    fn admit(_: *anyopaque) anyerror!void {}
+};
 
 test "keyless provider proceeds without a credential and sends no auth header" {
     const alloc = std.testing.allocator;
@@ -1189,24 +1244,28 @@ test "keyless provider proceeds without a credential and sends no auth header" {
     var delivery = stream_provider.DeliveryCertainty.init();
     var evidence: stream_provider.AttemptEvidence = .{};
     var callback_context: u8 = 0;
+    const events = stream_provider.EventSink{
+        .context = &callback_context,
+        .emit_fn = EventBridgeIgnore.emit,
+    };
+    const admission = stream_provider.Admission{
+        .context = &callback_context,
+        .admit_fn = EventBridgeIgnore.admit,
+    };
+    const messages = [_]types.ChatMessage{.{ .role = .user, .content = "Hi" }};
     const result = provider(&registry.entries.items[0]).stream(alloc, .{
-        .api_key = "",
-        .credential_source = .custom_provider,
-        .team = null,
+        .credential = .{ .secret = "" },
         .model = "m",
         .retry_count = 1,
-        .chat_url = "",
-        .payload = "{}",
+        .messages = &messages,
+        .tool_choice = .auto,
+        .provider_options = .{},
         .trace_ctx = .{},
         .content_capture_limit = null,
         .delivery = &delivery,
         .attempt_evidence = &evidence,
-        .callback_ctx = @ptrCast(&callback_context),
-        .on_content_chunk = struct {
-            fn ignore(_: *anyopaque, _: []const u8) void {}
-        }.ignore,
-        .on_tool_start = null,
-        .on_reasoning_chunk = null,
+        .events = events,
+        .admission = admission,
         .cancel_flag = &cancelled,
     });
     // The credential guard is bypassed; the bounded connect against

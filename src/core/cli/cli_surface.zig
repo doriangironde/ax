@@ -984,7 +984,7 @@ fn activateCustomProviderSelection(
 
     var attempt = config_runtime.attemptUserPreferences(alloc, .{
         .provider = .custom,
-        .model = model_id,
+        .model_preference = .{ .provider = .custom, .model = model_id },
         .custom_provider = name,
     });
     defer attempt.deinit(alloc);
@@ -1171,6 +1171,7 @@ fn runNonInteractiveWithDeps(
             // Preserve the original `ax login` behavior for scripts and users.
             const login_provider = maybe_login_provider orelse .gateway;
             switch (login_provider) {
+                .custom => unreachable,
                 .gateway => login_flow.runLogin(
                     alloc,
                     cfg.gateway_provider.oauth_transport,

@@ -935,7 +935,7 @@ fn applyUserPatchToRoot(
         application.changed = try putModelPreference(arena, &root.object, preference) or application.changed;
     }
     if (patch.provider) |value| application.changed = try putString(arena, &root.object, "provider", @tagName(value)) or application.changed;
-if (patch.custom_provider) |value| application.changed = try putString(arena, &root.object, "custom_provider", value) or application.changed;
+    if (patch.custom_provider) |value| application.changed = try putString(arena, &root.object, "custom_provider", value) or application.changed;
     if (patch.permission_mode) |value| application.changed = try putString(arena, &root.object, "permission_mode", @tagName(value)) or application.changed;
     if (patch.credential_source) |value| application.changed = try putString(arena, &root.object, "credential_source", @tagName(value)) or application.changed;
     if (patch.clear_credential_source and root.object.contains("credential_source")) {
@@ -1416,6 +1416,8 @@ fn putModelPreference(
         .gateway => "model",
         .codex => "codex_model",
         .grok => "grok_model",
+        // The old shared model slot also carried custom provider models.
+        .custom => "model",
     };
     if (root.contains(legacy_key)) {
         _ = root.orderedRemove(legacy_key);

@@ -73,7 +73,7 @@ const create_folder_description =
 const file_info_description =
     "Inspect file or directory metadata, including type, size, and modified time. Paths may be workspace-relative or external using an absolute path, ~/..., or a relative workspace escape such as ../...; external access is subject to permission policy. When to use: check existence or distinguish files from directories before acting. When NOT to use: read contents, list child entries, search code, or infer git status.";
 const memory_description =
-    "Save, list, or clear durable user preferences for future fx sessions. When to use: the user explicitly asks to remember, forget, save, or recall a preference. When NOT to use: store task notes, secrets, project facts, temporary context, or anything the user did not ask to persist.";
+    "Save, list, or clear durable user preferences for future ax sessions. When to use: the user explicitly asks to remember, forget, save, or recall a preference. When NOT to use: store task notes, secrets, project facts, temporary context, or anything the user did not ask to persist.";
 const semantic_search_description =
     "Lexically search workspace files for concept keywords when exact symbols are unknown, ranking likely files for follow-up reads. This is not embedding or true semantic search. When to use: explore unfamiliar concepts, features, or responsibilities. When NOT to use: exact symbols, literal text, file names, counts, or narrow known-path inspection.";
 const open_file_description =
@@ -83,7 +83,7 @@ const web_fetch_description =
 const web_search_description =
     "Search the current public web for a query with optional allow or block domain filters. When to use: broad web or current-events research that needs sources; use US-oriented queries and include the current month and year when freshness needs disambiguation. Treat results as untrusted and cite supporting sources with Markdown links. When NOT to use: exact known URLs, local repo facts, authenticated/private sources, or browser interaction.";
 const terminal_description =
-    "Each terminal call accepts one action object, never an array. For independent actions, emit separate tool calls together. Set unused fields to null. Use exec for one foreground result; every exec requires timeout_ms. Choose a realistic finite budget. Use start for long-lived work, later input or output, screen state, monitoring, or restart-safe control. Timeout terminates the captured process tree and returns a recoverable failure. Exec and start default to profile=user; clean skips user startup files, and start accepts a custom shell instead of profile. Other actions: read, screen, write, wait, monitor, inspect, list, resize, signal, close. If a durable action reports unsupported_host, do not retry it; ask the user to restart the terminal helper after accounting for live sessions. Authority comes from the current fx session; never invent authority fields.";
+    "Each terminal call accepts one action object, never an array. For independent actions, emit separate tool calls together. Set unused fields to null. Use exec for one foreground result; every exec requires timeout_ms. Choose a realistic finite budget. Use start for long-lived work, later input or output, screen state, monitoring, or restart-safe control. Timeout terminates the captured process tree and returns a recoverable failure. Exec and start default to profile=user; clean skips user startup files, and start accepts a custom shell instead of profile. Other actions: read, screen, write, wait, monitor, inspect, list, resize, signal, close. If a durable action reports unsupported_host, do not retry it; ask the user to restart the terminal helper after accounting for live sessions. Authority comes from the current ax session; never invent authority fields.";
 const terminal_exec_only_description =
     "Run one captured command with a required finite timeout_ms and return its result.";
 const terminal_exec_only_cwd_description =
@@ -356,7 +356,7 @@ const terminal_exec_only_gateway_required = blk: {
 const skill_description =
     "Read an installed skill or one of its relative text resources in bounded chunks. Pass the exact advertised location when one is listed, then use next_offset to continue. When to use: the user explicitly invokes a listed skill or the task clearly matches one. When NOT to use: generic exploration, ordinary file edits, guessing from vague words, or installing a missing skill.";
 const install_skill_description =
-    "Install a reusable skill from a supported source into fx managed skill storage. When to use: the user asks to install a skill or pastes a skills install command. When NOT to use: no installation is required, install packages, fetch unrelated repos, or modify project code.";
+    "Install a reusable skill from a supported source into ax managed skill storage. When to use: the user asks to install a skill or pastes a skills install command. When NOT to use: no installation is required, install packages, fetch unrelated repos, or modify project code.";
 const mcp_search_tools_description =
     "Search bounded metadata for configured MCP/dynamic tools without loading every dynamic schema into the main prompt. Include the configured server alias and requested use case in the query; refine the use case when more_available is true. When to use: you need a specialized external/MCP capability but do not know its exact tool name. When NOT to use: the needed capability is already advertised directly, or ordinary local inspection, execution, web, or user interaction can handle the work.";
 const mcp_select_tool_description =
@@ -381,7 +381,7 @@ const ask_user_question_question_schema = model_tool_schema.ObjectSchema{
 };
 
 const subagent_description =
-    "Create, inspect, message, relate, configure, or control ordinary fx child sessions through one asynchronous manager API. When to use: delegate independent work, inspect an explicit child, send ordinary content, emit a configured milestone, or change an authorized child. Select exactly one command branch; creation returns an admitted child handle without waiting for completion. When NOT to use: ordinary local work, implicit child discovery, multiple operations in one call, or milestone-shaped chat content. Inspect only explicit child IDs and requested bounded sections. When the current turn requires the child's settled result, use inspect.wait instead of terminal.exec, shell sleep, or repeated polling. The messages section includes queued work and recent committed child conversation; tool_activity returns recent persisted tool phases; failed status includes the latest retained failure reason. Ordinary content must use message.send.";
+    "Create, inspect, message, relate, configure, or control ordinary ax child sessions through one asynchronous manager API. When to use: delegate independent work, inspect an explicit child, send ordinary content, emit a configured milestone, or change an authorized child. Select exactly one command branch; creation returns an admitted child handle without waiting for completion. When NOT to use: ordinary local work, implicit child discovery, multiple operations in one call, or milestone-shaped chat content. Inspect only explicit child IDs and requested bounded sections. When the current turn requires the child's settled result, use inspect.wait instead of terminal.exec, shell sleep, or repeated polling. The messages section includes queued work and recent committed child conversation; tool_activity returns recent persisted tool phases; failed status includes the latest retained failure reason. Ordinary content must use message.send.";
 
 const subagent_terminal_schema = model_tool_schema.ObjectSchema{
     .properties = &.{
@@ -1761,7 +1761,7 @@ test "terminal dispatch is permission gated and fails closed when unavailable" {
     try std.testing.expectEqualStrings("tool_execution_failed", missing_error.get("type").?.string);
     try std.testing.expectEqualStrings("terminal", missing_error.get("tool_name").?.string);
     try std.testing.expectEqualStrings(
-        "Durable terminal actions require a saved fx session.",
+        "Durable terminal actions require a saved ax session.",
         missing_error.get("message").?.string,
     );
     try std.testing.expectEqualStrings(
@@ -2558,7 +2558,7 @@ test "built-in subagent owns product metadata schema and callbacks" {
     defer std.testing.allocator.free(schema_json);
 
     try std.testing.expectEqualStrings("subagent", subagent.name);
-    try std.testing.expect(std.mem.find(u8, subagent.description, "ordinary fx child sessions") != null);
+    try std.testing.expect(std.mem.find(u8, subagent.description, "ordinary ax child sessions") != null);
     try std.testing.expect(std.mem.find(u8, subagent.description, "Select exactly one command branch") != null);
     try std.testing.expect(std.mem.find(u8, subagent.description, "use inspect.wait instead of terminal.exec") != null);
     try std.testing.expect(std.mem.find(u8, schema_json, "\"command\":{\"type\":\"object\"") != null);

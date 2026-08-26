@@ -5,18 +5,18 @@ of this fork's history. Read it top to bottom before touching code.
 
 ## 0. Repo state (read this first)
 
-- Fork of [`vercel-labs/fx`](https://github.com/vercel-labs/fx) at commit
-  `04e0ae0` (v0.0.5), renamed to **ax**.
+- Fork of [`vercel-labs/fx`](https://github.com/vercel-labs/fx) at upstream
+  tag `v0.0.6` (merge `00e3f4f` over `04e0ae0`, v0.0.5), renamed to **ax**.
 - `origin` = `https://github.com/doriangironde/ax.git`, `upstream` =
   `https://github.com/vercel-labs/fx.git`.
 - Fork commits:
   - `0da89d9` — rebrand: user-facing identity + binary rename `fx` → `ax`.
   - `cbc8db6` — skills-menu filter-label collision fix + TUI/e2e expectation
     alignment.
-- Working tree carries the uncommitted **custom-provider feature** (G10):
-  31 files changed, two new modules (`src/core/config/custom_providers.zig`,
-  `src/gateway/openai_compatible.zig`) and one new dev tool
-  (`scripts/local-mock-openai.py`). Commit as one logical feature.
+  - `528321f` — G10 custom-provider feature (registry, presets, and the
+    OpenAI-compatible transport; see G10 below).
+  - `00e3f4f` — merge upstream `v0.0.6` with the fork identity, G10, and the
+    picker hub re-applied (see "v0.0.6 sync notes" below).
 - The binary is `./zig-out/bin/ax`. **Always use this binary for
   verification.** Never run a `PATH`-installed `fx`.
 
@@ -40,7 +40,9 @@ Kept (internal/compat, do not rename casually):
   `<fx-turn-context>` prompt marker is asserted by tests. See G9.
 - Provider attribution headers: `originator=fx` (OpenAI), 
   `x-grok-client-identifier=fx`, user-agent/`http-referer` =
-  `https://github.com/vercel-labs/fx`.
+  `https://github.com/vercel-labs/fx`. The OAuth authorize URLs built by
+  `chatgpt_oauth.zig`/`grok_oauth.zig` also carry `originator=fx` /
+  `referrer=fx` parameters — the PKCE URL unit tests assert them.
 - Skills-menu filter label `"Fx"` (see gap G4 — do not "fix" the spelling).
 - `fx.sh` documentation URLs (upstream docs serve the same feature set).
 
@@ -88,7 +90,7 @@ pane = the process spawned and exited, i.e. wedge or early-exit, not a crash).
 
 | Suite | Command | Result |
 |---|---|---|
-| Zig unit | `zig build test` | 8468/8476, 3 skipped; 5 fails = the sandbox-environment set (PTY/Keychain/raw-mode denials + pre-existing terminal leak + one rotating collateral victim; byte-identical on pristine code under the same sandbox). Includes the 25+ custom-provider tests. Unsandboxed shell shows the historical counts below. |
+| Zig unit | `zig build test` | 8538/8541, 3 skipped; 3 fails + 1 leak = the sandbox-environment set only (PTY/Keychain/raw-mode denials + the pre-existing `terminal start` leak; byte-identical on pristine upstream code under the same sandbox). Includes the 25+ custom-provider tests and the v0.0.6 additions. Unsandboxed shell shows the historical counts below. |
 | CLI e2e | `bun test cli.test.ts` | 112/112 |
 | e2e non-TUI | `bun test config-persistence.test.ts prompt-history.test.ts` | pass |
 | ACP + gateway | `bun test acp.test.ts ./gateway-stream-lifecycle.test.ts ./tmux-helpers.test.ts` | pass (last verified 298/0 across these + cli + persistence) |
@@ -227,14 +229,15 @@ keys resolve from the registry (env ref wins, then inline), tracked as the
 its models, `/model` and the model cache serve the static catalog, sessions
 and subagents carry the selection (`custom_provider` in settings.json and the
 session codec, optional keys, backward compatible), and resume/restore routes
-back through the same registry. Interactive: `/login` -> Switch provider lists
-every registered custom provider after the three builtins; selecting one
-activates it in place and marks it `current`. A custom provider without a
-usable key opens a masked inline key entry; Enter stores the key into
-`~/.fx/providers.json` (removing `api_key_env` so the stored key is
-authoritative) and completes the switch. Esc returns to the provider stage.
-Permissions: automatic review is disabled for custom providers; sensitive
-actions surface the direct prompt instead.
+back through the same registry. Interactive: `/login` opens the setup hub and
+its **Model provider** stage lists every registered custom provider after the
+three builtins (plus unregistered presets); selecting one activates it in
+place and marks it `current`. A custom provider without a usable key opens a
+masked inline key entry; Enter stores the key into `~/.fx/providers.json`
+(removing `api_key_env` so the stored key is authoritative) and completes the
+switch. Esc returns to the provider stage. Permissions: automatic review is
+disabled for custom providers (the custom bundle carries no
+`permission_reviewer`); sensitive actions surface the direct prompt instead.
 
 **Inline key entry notes:** the typed key lives in the auth runtime's
 `api_key_input` buffer, is masked in the picker, and is zeroed after the save;
@@ -485,6 +488,44 @@ mistakes): `zig build test`, `bun test cli.test.ts`, `bun test
 tui-slash-menu.test.ts`. The two classic sweep mistakes: replacing code
 identifiers (compile errors, or worse, silently) and replacing fixtures the
 producer still emits as `fx` (tests fail as expected-vs-actual mismatches).
+
+**v0.0.6 sync notes (2026-08-26, merge `00e3f4f`).** Besides re-running the
+sweep, re-applying G10 onto v0.0.6 required:
+- Upstream replaced the `model`/`codex_model`/`grok_model` settings slots with
+  a per-provider `models` map (`model_preferences.zig`). The fork's
+  `custom_provider` settings key survives; the custom model preference now
+  lives at `models.custom` and `putModelPreference` removes the legacy `model`
+  key for `.custom` too.
+- Upstream centralized provider routing in `core/gateway/provider_set.zig`
+  (`Set.select`). The fork adds a `custom: Bundle = .{}` slot (empty bundle =
+  unavailable stream, no reviewer) and fills it per selection from the live
+  registry entry: `builtins.providers.customBundle(entry, catalog_context)`.
+  `generation_usage_provider.Set` got the same `.custom` slot. AskContext gets
+  a `providerSet()` accessor that injects the bundle; `App.providerSet()` does
+  the same from `selectionCustomEntry()` (needs `*App`, not `*const`).
+- The `/login` picker is now the setup hub (`.connections` stage holds the
+  sign-in ways). The fork's custom/preset rows live in the `.provider` stage
+  after the three built-ins; `openPickerWithActiveProvider` still marks the
+  active row. The old TUI index-math tests were re-derived for the hub; the
+  e2e custom-provider test navigates `/login` → **Model provider**.
+- `stream_provider.Provider` lost `build_fn`; transports build the payload
+  inside `stream_fn` from `ModelRequest.data()` and emit through `EventSink`.
+  `openai_compatible.zig` was ported to that shape (auth header from
+  `credential.secret`, `Admission.admit()`, `.completed`/`.failed` results,
+  `types.ModelCompletion`). `originator=/referrer=` URL params on OAuth
+  authorize links stay `fx` at the binary and in the PKCE tests.
+- Sweep asymmetries hit in this sync (fix by keeping BOTH sides identical):
+  escaped-quote wire strings (`\"name\":\"fx\"`) defeat the `"fx"` protect
+  rule — restore MCP `clientInfo` name manually at the emission sites
+  (mcp_runtime.zig x3, tool_subscription.zig) and `_meta.fx.continueRecovery`
+  (acp/prompt.zig parse + test input, acp.test.ts). Split-string producers
+  (`"/tmp", "fx-recordings"`) defeat `\/tmp\/fx` — the tape dir must stay
+  `fx-recordings`/`fx-record-*` (G8). Markdown-fixture and git-parser tests
+  assert `fx` literals while the sweep changed inputs — the fixture and the
+  assertion must agree. The `SkillMenuSourceFilter` enum member `fx` is
+  protected at the `.fx` uses but not at the bare `fx,` declaration — restore
+  the declaration. A test variable named `fx` (acp/prompt.zig meta parse) was
+  renamed by the sweep; identifier renames must be reverted.
 Also remember the auto-review classifier's SHA-256 check:
 `auto_classifier.zig` "automatic review policy matches the tested XML v1
 artifact" — any change to the template text requires recomputing the digest

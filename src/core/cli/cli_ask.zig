@@ -1777,7 +1777,7 @@ fn runPromptInternal(alloc: Allocator, prompt: []const u8, permission_override: 
         .gateway_chat_url = cfg.gateway_chat_url,
         .advertised_tool_names = tool_projection.advertised_names,
         .advertised_functions = tool_projection.advertised_functions,
-        .provider_capabilities = cfg.providerSet().select(ctx.provider).capabilities,
+        .provider_capabilities = ctx.providerSet().select(ctx.provider).capabilities,
         .custom_tool_guidance = tool_projection.custom_guidance,
         .agent_step_limit = startup.agent_step_limit,
         .max_tool_result_bytes = startup.max_tool_result_bytes,
@@ -2064,7 +2064,7 @@ fn resolveModelCapabilities(raw_ctx: *anyopaque, _: Allocator, model: []const u8
     const catalog = bundle.model_catalog orelse return bundle.fallbackModelCapabilities(model);
     return ctx.capability_resolver.resolve(
         ctx.alloc,
-        resolved_catalog,
+        catalog,
         .{
             .access = ctx.model_catalog_access,
             .endpoint = ctx.cfg.gateway_models_path,
@@ -5893,7 +5893,7 @@ test "disabled headless ask scope leaves the interactive SIGINT handler untouche
     try std.testing.expectEqual(@as(usize, 1), test_previous_sigint_count.load(.seq_cst));
 }
 
-test "fx ask auto mode applies automatic clear and caution without a prompt" {
+test "ax ask auto mode applies automatic clear and caution without a prompt" {
     const FakeClassifier = struct {
         calls: usize = 0,
         decision: permission_auto_classifier.Decision = .clear,

@@ -57,7 +57,7 @@ function startUpgradeServer(
 ): { baseUrl: string; stop: () => void } {
   const artifactDir = join(root, "release-artifact");
   const wrapperPath = join(artifactDir, "fx");
-  const archivePath = join(root, "fx.tar.gz");
+  const archivePath = join(root, "ax.tar.gz");
   mkdirSync(artifactDir);
   const script = `#!/bin/sh
 {
@@ -77,7 +77,7 @@ exec ${shellQuote(FX_BIN)} "$@"
   const archive = readFileSync(archivePath);
   const checksum = createHash("sha256").update(archive).digest("hex");
   const platform = `${process.platform === "darwin" ? "macos" : "linux"}-${process.arch === "arm64" ? "aarch64" : "x86_64"}`;
-  const archiveRoute = `/v9.9.9/fx-${platform}.tar.gz`;
+  const archiveRoute = `/v9.9.9/ax-${platform}.tar.gz`;
   const server = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
@@ -740,7 +740,7 @@ test("volatile status rows normalize before stable-grid comparison", () => {
 test.skipIf(!tmuxAvailable())(
   "session resume command group opens last and explicit session ids",
   async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-session-resume-command-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-session-resume-command-")));
     const home = join(root, "home");
     const workspace = join(root, "workspace");
     const seedStderrPath = join(root, "seed-stderr.log");
@@ -1055,7 +1055,7 @@ printf '${trailingMarker}   '
 test.skipIf(!tmuxAvailable())(
   "Ctrl-O opens retained command output and restores grouped compact output",
   async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-full-transcript-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-full-transcript-")));
     const home = join(root, "home");
     const workspace = join(root, "workspace");
     const stderrPath = join(root, "stderr.log");
@@ -1493,7 +1493,7 @@ test.skipIf(!tmuxAvailable())(
   "cancelled cap-crossing command keeps grouped rows stable and Ctrl-O opens its artifact",
   async () => {
     const timeout = 60_000;
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-cancelled-command-cap-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-cancelled-command-cap-")));
     const home = join(root, "home");
     const workspace = join(root, "workspace");
     const stderrPath = join(root, "stderr.log");
@@ -1766,7 +1766,7 @@ test.skipIf(!tmuxAvailable())(
   "cancelled below-cap command exposes its TERM tail only through Ctrl-O",
   async () => {
     const timeout = 60_000;
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-cancelled-command-below-cap-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-cancelled-command-below-cap-")));
     const home = join(root, "home");
     const workspace = join(root, "workspace");
     const stderrPath = join(root, "stderr.log");
@@ -2051,7 +2051,7 @@ test.skipIf(!tmuxAvailable())(
 test.skipIf(!tmuxAvailable())(
   "streamed document append preserves native scrollback without ONLCR",
   async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-document-append-newlines-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-document-append-newlines-")));
     const home = join(root, "home");
     const workspace = join(root, "workspace");
     const stderrPath = join(root, "stderr.log");
@@ -2121,7 +2121,7 @@ test.skipIf(!tmuxAvailable())(
 test.skipIf(!tmuxAvailable())(
   "Ctrl-C closes the Ctrl-O viewer without clearing the unsent draft",
   async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-full-transcript-draft-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-full-transcript-draft-")));
     const home = join(root, "home");
     const workspace = join(root, "workspace");
     const stderrPath = join(root, "stderr.log");
@@ -2197,7 +2197,7 @@ test.skipIf(!tmuxAvailable())(
 test.skipIf(!tmuxAvailable())(
   "Cmd+R refuses session switching over a draft and opens after explicit clear",
   async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-session-picker-draft-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-session-picker-draft-")));
     const home = join(root, "home");
     const workspace = join(root, "workspace");
     const stderrPath = join(root, "stderr.log");
@@ -2265,7 +2265,7 @@ test.skipIf(!tmuxAvailable())(
 test.skipIf(!tmuxAvailable())(
   "Ctrl-O viewer preserves hidden composer input while Ctrl-X stays inert",
   async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-full-transcript-input-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-full-transcript-input-")));
     const home = join(root, "home");
     const workspace = join(root, "workspace");
     const stderrPath = join(root, "stderr.log");
@@ -2349,7 +2349,7 @@ test.skipIf(!tmuxAvailable())(
 test.skipIf(!tmuxAvailable())(
   "Ctrl-C leaves Ctrl-O before cancelling a streaming command",
   async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-full-transcript-cancel-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-full-transcript-cancel-")));
     const home = join(root, "home");
     const workspace = join(root, "workspace");
     const stderrPath = join(root, "stderr.log");
@@ -2415,7 +2415,7 @@ test.skipIf(!tmuxAvailable())(
 test.skipIf(!tmuxAvailable())(
   "Ctrl-O keeps command output live while the alternate buffer is open",
   async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-full-transcript-live-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-full-transcript-live-")));
     const home = join(root, "home");
     const workspace = join(root, "workspace");
     const stderrPath = join(root, "stderr.log");
@@ -2478,7 +2478,7 @@ test.skipIf(!tmuxAvailable())(
 test.skipIf(!tmuxAvailable())(
   "streaming wheel input stays inline until Ctrl-O",
   async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-stream-scroll-inline-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-stream-scroll-inline-")));
     const home = join(root, "home");
     const workspace = join(root, "workspace");
     const stderrPath = join(root, "stderr.log");
@@ -2624,7 +2624,7 @@ test.skipIf(!tmuxAvailable())(
 test.skipIf(!tmuxAvailable())(
   "Ctrl-O navigation during shell streaming preserves grouped compact rows",
   async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-full-transcript-navigation-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-full-transcript-navigation-")));
     const home = join(root, "home");
     const workspace = join(root, "workspace");
     const stderrPath = join(root, "stderr.log");
@@ -2703,7 +2703,7 @@ test.skipIf(!tmuxAvailable())(
 test.skipIf(!tmuxAvailable())(
   "an ask-user prompt takes over Ctrl-O and accepts its choice inline",
   async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-full-transcript-question-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-full-transcript-question-")));
     const home = join(root, "home");
     const workspace = join(root, "workspace");
     const stderrPath = join(root, "stderr.log");
@@ -2784,7 +2784,7 @@ test.skipIf(!tmuxAvailable())(
 test.skipIf(!tmuxAvailable())(
   "Ctrl-O preserves inline block spacing while expanding tool detail",
   async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-full-transcript-spacing-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-full-transcript-spacing-")));
     const home = join(root, "home");
     const workspace = join(root, "workspace");
     const stderrPath = join(root, "stderr.log");
@@ -2890,7 +2890,7 @@ test.skipIf(!tmuxAvailable())(
 test.skipIf(!tmuxAvailable())(
   "Ctrl-O restores a long Markdown transcript without replaying it into scrollback",
   async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-full-transcript-markdown-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-full-transcript-markdown-")));
     const home = join(root, "home");
     const workspace = join(root, "workspace");
     const stderrPath = join(root, "stderr.log");
@@ -2956,7 +2956,7 @@ test.skipIf(!tmuxAvailable())(
 test.skipIf(!tmuxAvailable())(
   "Ctrl-O renders read_file results as readable content",
   async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-full-transcript-read-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-full-transcript-read-")));
     const home = join(root, "home");
     const workspace = join(root, "workspace");
     const stderrPath = join(root, "stderr.log");
@@ -3018,7 +3018,7 @@ test.skipIf(!tmuxAvailable())(
 test.skipIf(!tmuxAvailable())(
   "Ctrl-O expands each parallel read-only tool detail",
   async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-full-transcript-parallel-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-full-transcript-parallel-")));
     const home = join(root, "home");
     const workspace = join(root, "workspace");
     const stderrPath = join(root, "stderr.log");
@@ -3083,7 +3083,7 @@ test.skipIf(!tmuxAvailable())(
 test.skipIf(!tmuxAvailable())(
   "a file approval takes over Ctrl-O and resolves back to the inline transcript",
   async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-full-transcript-approval-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-full-transcript-approval-")));
     const home = join(root, "home");
     const workspace = join(root, "workspace");
     const stderrPath = join(root, "stderr.log");
@@ -3214,7 +3214,7 @@ test.skipIf(!tmuxAvailable())(
 test.skipIf(!tmuxAvailable())(
   "a shell approval takes over Ctrl-O and accepts its choice inline",
   async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-full-transcript-shell-approval-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-full-transcript-shell-approval-")));
     const home = join(root, "home");
     const workspace = join(root, "workspace");
     const stderrPath = join(root, "stderr.log");
@@ -3276,7 +3276,7 @@ test.skipIf(!tmuxAvailable())(
 test.skipIf(!tmuxAvailable())(
   "a shell approval handoff does not duplicate a long Ctrl-O transcript in scrollback",
   async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-full-transcript-handoff-scrollback-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-full-transcript-handoff-scrollback-")));
     const home = join(root, "home");
     const workspace = join(root, "workspace");
     const stderrPath = join(root, "stderr.log");
@@ -3443,7 +3443,7 @@ test.skipIf(!tmuxAvailable())(
 test.skipIf(!tmuxAvailable())(
   "Ctrl-O pressure preserves transcript and modal ownership under deterministic load",
   async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-full-transcript-pressure-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-full-transcript-pressure-")));
     const home = join(root, "home");
     const workspace = join(root, "workspace");
     const stderrPath = join(root, "stderr.log");
@@ -3885,7 +3885,7 @@ test.skipIf(!tmuxAvailable())(
 
       expect(paneExitMatches(contender.paneStatus(), 1)).toBe(true);
       expect(readFileSync(contenderStderrPath, "utf8")).toBe(
-        "fx: another Fx process may be using this session (running or suspended); check other terminals or run jobs, then use fg or quit that process\n",
+        "ax: another Fx process may be using this session (running or suspended); check other terminals or run jobs, then use fg or quit that process\n",
       );
       expect(owner.isPaneAlive()).toBe(true);
       const contenderScrollback = await contender.captureFullScrollback();
@@ -4357,7 +4357,7 @@ test.skipIf(!tmuxAvailable())(
       expect(paneExitMatches(active.paneStatus(), 0)).toBe(true);
       const scrollback = stripAnsi(await active.captureFullScrollback());
       const ansiScrollback = await active.captureFullScrollbackEscapes();
-      const expected = `Continue session with: fx --resume ${sessionId}`;
+      const expected = `Continue session with: ax --resume ${sessionId}`;
       expect(scrollback).toContain(expected);
       expect(scrollback).not.toContain("To continue this session, run:");
       expect(ansiScrollback).toContain(`\x1b[38;5;245m${expected}\x1b[39m`);
@@ -4371,7 +4371,7 @@ test.skipIf(!tmuxAvailable())(
         .map((line) => line.trim())
         .find((line) => line === expected);
       const printedCommand = handoffLine?.slice("Continue session with: ".length);
-      expect(printedCommand).toBe(`fx --resume ${sessionId}`);
+      expect(printedCommand).toBe(`ax --resume ${sessionId}`);
 
       await active.kill();
       active = await TmuxSession.create({
@@ -4912,7 +4912,7 @@ test.skipIf(!tmuxAvailable())(
       const version = (await runFx(["--version"])).stdout.trim();
       await active.sendHexBytes(["07"]);
 
-      const updatedNotice = `● fx has been updated to v${version}`;
+      const updatedNotice = `● ax has been updated to v${version}`;
       await active.waitForText(updatedNotice, TIMEOUT);
       const resumed = await waitForScrollback(active, "UPGRADE_CTRL_G_INITIAL_DONE");
       expect(resumed).toContain("UPGRADE_CTRL_G_INITIAL_DONE");
@@ -5010,7 +5010,7 @@ test.skipIf(!tmuxAvailable())(
       const version = (await runFx(["--version"])).stdout.trim();
       await active.sendHexBytes(["07"]);
 
-      await active.waitForText(`● fx has been updated to v${version}`, TIMEOUT);
+      await active.waitForText(`● ax has been updated to v${version}`, TIMEOUT);
       const resumed = await waitForScrollback(
         active,
         "UPGRADE_CORRUPT_INITIAL_DONE",
@@ -5598,7 +5598,7 @@ test.skipIf(!tmuxAvailable())(
       const currentPicker = stripAnsi(await active.capturePane());
       expect(currentPicker).toContain("Sessions 1");
       expect(currentPicker).toContain("[Current workspace]");
-      expect(currentPicker).not.toContain("𝒇x");
+      expect(currentPicker).not.toContain("𝒂x");
       expect(currentPicker).toContain("Save the workspace A transcript.");
       expect(currentPicker).not.toContain("Save the workspace B transcript.");
 
@@ -5989,7 +5989,7 @@ test.skipIf(!tmuxAvailable())(
 );
 
 test.skipIf(!tmuxAvailable())(
-  "new and resumed sessions preserve native terminal scrollback while fx is active",
+  "new and resumed sessions preserve native terminal scrollback while ax is active",
   async () => {
     const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-tui-direct-resume-scroll-")));
     const home = join(root, "home");
@@ -6149,7 +6149,7 @@ test.skipIf(!tmuxAvailable())(
   "cancelled command presentation survives a distinct-process resume",
   async () => {
     const timeout = 60_000;
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-cancelled-command-resume-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-cancelled-command-resume-")));
     const home = join(root, "home");
     const workspace = join(root, "workspace");
     const initialStderrPath = join(root, "initial-stderr.log");
@@ -6326,7 +6326,7 @@ test.skipIf(!tmuxAvailable())(
   "zero-output cancelled command restores its row without an output block",
   async () => {
     const timeout = 60_000;
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-zero-output-cancel-resume-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-zero-output-cancel-resume-")));
     const home = join(root, "home");
     const workspace = join(root, "workspace");
     const initialStderrPath = join(root, "initial-stderr.log");

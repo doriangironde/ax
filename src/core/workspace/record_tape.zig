@@ -122,7 +122,7 @@ fn configureAutomatic(
         var random_bytes: [6]u8 = undefined;
         io_mod.getIo().random(&random_bytes);
         const random_hex = std.fmt.bytesToHex(random_bytes, .lower);
-        const path = try std.fmt.allocPrint(alloc, "{s}/ax-record-{d}-{s}.fxtape", .{ root, nowMs(), random_hex });
+        const path = try std.fmt.allocPrint(alloc, "{s}/fx-record-{d}-{s}.fxtape", .{ root, nowMs(), random_hex });
         defer alloc.free(path);
 
         configureWithOptions(alloc, path, initial_cols, initial_rows, fx_version, true, true) catch |err| switch (err) {

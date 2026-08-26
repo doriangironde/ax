@@ -34,7 +34,7 @@ const sort_utils = @import("../core/shared/sort_utils.zig");
 const identity_section =
     \\# Identity and context
     \\
-    \\- You are fx, a local coding CLI assistant with tool access.
+    \\- You are ax, a local coding CLI assistant with tool access.
     \\- Work inside the user's real local workspace and use it as the source of truth for code, docs, commands, and verification.
     \\- Runtime context may provide the current cwd, OS, shell, date, git state, and workspace root. Treat it as current for the turn; inspect the workspace when it is missing or stale.
     \\- Never claim you cannot access local files or run commands when the relevant tools are available.
@@ -2904,8 +2904,8 @@ fn appendStatic(input: StaticContextInput, arena: Allocator, messages: *std.Arra
 fn permissionModeContext(permission_mode: types.PermissionMode) []const u8 {
     return switch (permission_mode) {
         .ask => "Runtime context: permission mode is ask. Sensitive tool calls may require user approval unless configured rules or session grants already decide them. Tool admission remains authoritative.",
-        .auto => "Runtime context: permission mode is auto. After configured rules, session grants, and deterministic safe-tool authority, fx sends each unresolved action to a narrow safety reviewer. A clear result authorizes only that exact action. A caution or unavailable result holds only that action and returns advice without opening a permission screen, disabling tools, or ending the turn. Exact cautions are reused for this turn; choose a materially different safe action or explain why no safe path remains. Tool admission and exact live revalidation remain authoritative.",
-        .yolo => "Runtime context: permission mode is yolo. fx permission policy is disabled. Tool lookup, argument validation, execution authority, cancellation, limits, operating-system permissions, and remote authentication remain authoritative.",
+        .auto => "Runtime context: permission mode is auto. After configured rules, session grants, and deterministic safe-tool authority, ax sends each unresolved action to a narrow safety reviewer. A clear result authorizes only that exact action. A caution or unavailable result holds only that action and returns advice without opening a permission screen, disabling tools, or ending the turn. Exact cautions are reused for this turn; choose a materially different safe action or explain why no safe path remains. Tool admission and exact live revalidation remain authoritative.",
+        .yolo => "Runtime context: permission mode is yolo. ax permission policy is disabled. Tool lookup, argument validation, execution authority, cancellation, limits, operating-system permissions, and remote authentication remain authoritative.",
     };
 }
 
@@ -3311,7 +3311,7 @@ test "runtime context composes exact auto mode with noninteractive blockers" {
     try std.testing.expectEqual(@as(usize, 2), messages.items.len);
     try std.testing.expectEqual(types.ChatRole.system, messages.items[1].role);
     try std.testing.expectEqualStrings(
-        "Runtime context: permission mode is auto. After configured rules, session grants, and deterministic safe-tool authority, fx sends each unresolved action to a narrow safety reviewer. A clear result authorizes only that exact action. A caution or unavailable result holds only that action and returns advice without opening a permission screen, disabling tools, or ending the turn. Exact cautions are reused for this turn; choose a materially different safe action or explain why no safe path remains. Tool admission and exact live revalidation remain authoritative.",
+        "Runtime context: permission mode is auto. After configured rules, session grants, and deterministic safe-tool authority, ax sends each unresolved action to a narrow safety reviewer. A clear result authorizes only that exact action. A caution or unavailable result holds only that action and returns advice without opening a permission screen, disabling tools, or ending the turn. Exact cautions are reused for this turn; choose a materially different safe action or explain why no safe path remains. Tool admission and exact live revalidation remain authoritative.",
         messages.items[1].content.?,
     );
 }
@@ -3585,7 +3585,7 @@ test "gateway_system_prompt: compact ordered sections" {
 }
 
 test "gateway_system_prompt: local workspace authority" {
-    try expectDefaultPromptContains("You are fx, a local coding CLI assistant with tool access.");
+    try expectDefaultPromptContains("You are ax, a local coding CLI assistant with tool access.");
     try expectDefaultPromptContains("real local workspace");
     try expectDefaultPromptContains("source of truth for code, docs, commands, and verification");
     try expectDefaultPromptContains("Treat it as current for the turn; inspect the workspace when it is missing or stale.");

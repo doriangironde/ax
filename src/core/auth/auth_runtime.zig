@@ -1615,6 +1615,7 @@ pub const Runtime = struct {
                     => unreachable,
                 },
                 .provider, .source, .team => unreachable,
+                .custom_provider, .custom_provider_preset => unreachable,
             },
             .provider => switch (selected) {
                 .provider, .custom_provider, .custom_provider_preset => self.closePicker(alloc),
@@ -2720,7 +2721,7 @@ test "setup picker projects the active Vercel team" {
     try std.testing.expectEqualStrings("team_1", current_team.?);
 }
 
-test "adopting fx login publishes Vercel session availability to setup" {
+test "adopting ax login publishes Vercel session availability to setup" {
     const alloc = std.testing.allocator;
     var runtime: Runtime = .{};
     defer runtime.deinit(alloc);
@@ -2871,7 +2872,7 @@ test "custom provider choices compare by name" {
     try std.testing.expect(!(Choice{ .custom_provider = "go" }).eql(.{ .custom_provider_preset = "go" }));
 }
 
-test "login root stage lists registered customs and presets before management rows" {
+test "login root stage shows the setup hub before the provider stage rows" {
     const alloc = std.testing.allocator;
     var runtime: Runtime = .{};
     defer runtime.deinit(alloc);
@@ -2883,29 +2884,31 @@ test "login root stage lists registered customs and presets before management ro
     try runtime.provider_picker_presets.append(alloc, preset);
 
     const view = runtime.pickerView();
-    try std.testing.expectEqual(@as(usize, 9), view.choiceCount());
-    // The four built-in auth rows keep their positions.
-    try std.testing.expect((Choice{ .action = .login }).eql(view.choiceAt(0).?));
-    try std.testing.expect((Choice{ .action = .chatgpt_login }).eql(view.choiceAt(1).?));
-    try std.testing.expect((Choice{ .action = .grok_login }).eql(view.choiceAt(2).?));
-    try std.testing.expect((Choice{ .action = .setup }).eql(view.choiceAt(3).?));
-    // Registered custom providers and unregistered presets follow, exactly
-    // like the provider stage rows.
-    const custom_choice = view.choiceAt(4).?;
-    try std.testing.expect((Choice{ .custom_provider = "opencode-go" }).eql(custom_choice));
-    try std.testing.expectEqualStrings("OpenCode Go", view.choiceLabel(custom_choice));
-    try std.testing.expect(view.choiceEnabled(custom_choice));
-    const preset_choice = view.choiceAt(5).?;
-    try std.testing.expect((Choice{ .custom_provider_preset = "ollama" }).eql(preset_choice));
-    try std.testing.expectEqualStrings("Ollama", view.choiceLabel(preset_choice));
-    try std.testing.expectEqualStrings("", view.choiceDescription(preset_choice));
-    // The management rows shift behind them.
-    try std.testing.expect((Choice{ .action = .switch_provider }).eql(view.choiceAt(6).?));
-    try std.testing.expect((Choice{ .action = .change_team }).eql(view.choiceAt(7).?));
-    try std.testing.expect((Choice{ .action = .switch_credential }).eql(view.choiceAt(8).?));
-    try std.testing.expect(view.choiceAt(9) == null);
+    try std.testing.expectEqual(@as(usize, 4), view.choiceCount());
+    // The setup hub rows keep their positions; sign-in ways live behind
+    // Connections.
+    try std.testing.expect((Choice{ .action = .connections }).eql(view.choiceAt(0).?));
+    try std.testing.expect((Choice{ .action = .switch_provider }).eql(view.choiceAt(1).?));
+    try std.testing.expect((Choice{ .action = .change_team }).eql(view.choiceAt(2).?));
+    try std.testing.expect((Choice{ .action = .switch_credential }).eql(view.choiceAt(3).?));
+    try std.testing.expect(view.choiceAt(4) == null);
 
-    // Selecting a root custom provider closes the picker like the auth rows.
+    // Registered custom providers and unregistered presets follow the
+    // built-in rows in the provider stage.
+    runtime.picker_stage = .provider;
+    const provider_view = runtime.pickerView();
+    try std.testing.expectEqual(@as(usize, 5), provider_view.choiceCount());
+    const custom_choice = provider_view.choiceAt(3).?;
+    try std.testing.expect((Choice{ .custom_provider = "opencode-go" }).eql(custom_choice));
+    try std.testing.expectEqualStrings("OpenCode Go", provider_view.choiceLabel(custom_choice));
+    try std.testing.expect(provider_view.choiceEnabled(custom_choice));
+    const preset_choice = provider_view.choiceAt(4).?;
+    try std.testing.expect((Choice{ .custom_provider_preset = "ollama" }).eql(preset_choice));
+    try std.testing.expectEqualStrings("Ollama", provider_view.choiceLabel(preset_choice));
+    try std.testing.expectEqualStrings("", provider_view.choiceDescription(preset_choice));
+
+    // Selecting a provider-stage custom provider closes the picker like the
+    // built-in auth rows.
     runtime.picker_selection = custom_choice;
     const taken = runtime.takePickerChoice(alloc);
     try std.testing.expect(taken != null);

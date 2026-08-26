@@ -51,7 +51,7 @@ afterEach(async () => {
 
 function createIsolatedRoot(baseDir = tmpdir()): IsolatedRoot {
   const root = realpathSync(
-    mkdtempSync(join(baseDir, "fx-auto-mode-reliability-e2e-")),
+    mkdtempSync(join(baseDir, "ax-auto-mode-reliability-e2e-")),
   );
   const home = join(root, "home");
   const workspace = join(root, "workspace");

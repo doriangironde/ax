@@ -6407,7 +6407,7 @@ test "required replay spill failure returns recoverable capture failure" {
     const alloc = std.testing.allocator;
     var store = command_replay_store.EphemeralStore.initForTesting(
         alloc,
-        "/definitely/missing/fx-replay-dir",
+        "/definitely/missing/ax-replay-dir",
     );
     defer store.deinit();
     var rt = TestRuntime{

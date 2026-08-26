@@ -86,7 +86,7 @@ function createRoot(
 }
 
 function createEmptyRoot(label: string) {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), `fx-mcp-http-${label}-`)));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), `ax-mcp-http-${label}-`)));
   cleanupRoot = root;
   const home = join(root, "home");
   const workspace = join(root, "workspace");

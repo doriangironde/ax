@@ -1168,7 +1168,7 @@ describe("effect-aware command permissions", () => {
       await activeSession.sendText("Run the prepared two-command history fixture.");
       await activeSession.waitForText(COMMAND_APPROVAL_PROMPT, TIMEOUT);
       await activeSession.sendKeys("Tab");
-      await activeSession.waitForText("Yes, and tell fx what to do next", TIMEOUT);
+      await activeSession.waitForText("Yes, and tell ax what to do next", TIMEOUT);
       await activeSession.sendLiteralText(feedback);
       await activeSession.waitForText(`Yes, ${feedback}`, TIMEOUT);
       await activeSession.sendKeys("Enter");
@@ -2023,7 +2023,7 @@ describe("effect-aware command permissions", () => {
       expect(escapes).not.toContain("github.com");
       const reportPath = latestTraceReportPath(root);
       const report = readFileSync(reportPath, "utf8");
-      expect(report).toContain("# fx trace");
+      expect(report).toContain("# ax trace");
       expect(report).toContain("## Summary");
       expect(report).toContain(root.workspace);
       expect(statSync(reportPath).mode & 0o077).toBe(0);
@@ -2895,7 +2895,7 @@ describe("effect-aware command permissions", () => {
   );
 
   test(
-    "default fx ask defaults missing permission mode to auto",
+    "default ax ask defaults missing permission mode to auto",
     async () => {
       const root = createIsolatedRoot();
       const marker = join(root.workspace, "ask-turn-default-auto.txt");
@@ -2922,7 +2922,7 @@ describe("effect-aware command permissions", () => {
   );
 
   test(
-    "fx ask yolo returns repeated user-profile command results to the model",
+    "ax ask yolo returns repeated user-profile command results to the model",
     async () => {
       const root = createIsolatedRoot();
       const callIds = ["direct_1", "direct_2", "direct_3"];
@@ -2953,7 +2953,7 @@ describe("effect-aware command permissions", () => {
   );
 
   test(
-    "fx ask yolo completes more than ten serial user-profile commands when unlimited",
+    "ax ask yolo completes more than ten serial user-profile commands when unlimited",
     async () => {
       const root = createIsolatedRoot();
       const gateway = startFakeGateway([
@@ -2984,7 +2984,7 @@ describe("effect-aware command permissions", () => {
   );
 
   test(
-    "fx ask condition-waits for a canonical child without shell polling",
+    "ax ask condition-waits for a canonical child without shell polling",
     async () => {
       const root = createIsolatedRoot();
       const childPrompt = "Return the deterministic child result.";
@@ -3101,7 +3101,7 @@ describe("effect-aware command permissions", () => {
   );
 
   test(
-    "fx ask pauses and resumes provider recovery for a child",
+    "ax ask pauses and resumes provider recovery for a child",
     async () => {
       const root = createIsolatedRoot();
       const childPrompt = "Trigger the deterministic provider failure.";
@@ -3261,7 +3261,7 @@ describe("effect-aware command permissions", () => {
   );
 
   test(
-    "fx ask runs repeated turns for a persistent canonical subagent",
+    "ax ask runs repeated turns for a persistent canonical subagent",
     async () => {
       const root = createIsolatedRoot();
       const firstPrompt = "Return the deterministic first persistent result.";
@@ -3357,7 +3357,7 @@ describe("effect-aware command permissions", () => {
   );
 
   test(
-    "fx ask delivers periodic child notifications at the next available parent step",
+    "ax ask delivers periodic child notifications at the next available parent step",
     async () => {
       const root = createIsolatedRoot();
       const childPrompt = "ASK_PARENT_DELIVERY_CHILD_PROMPT";
@@ -3558,7 +3558,7 @@ describe("effect-aware command permissions", () => {
   );
 
   test(
-    "fx ask delivers two ordered child messages at one parent boundary",
+    "ax ask delivers two ordered child messages at one parent boundary",
     async () => {
       const root = createIsolatedRoot();
       const childPrompt = "ASK_MULTI_DELIVERY_CHILD_PROMPT";
@@ -3837,7 +3837,7 @@ describe("effect-aware command permissions", () => {
   );
 
   test(
-    "fx ask resumes a 64 KiB child message through five bounded projections",
+    "ax ask resumes a 64 KiB child message through five bounded projections",
     async () => {
       const root = createIsolatedRoot();
       const childPrompt = "ASK_64K_DELIVERY_CHILD_PROMPT";
@@ -4021,7 +4021,7 @@ describe("effect-aware command permissions", () => {
   );
 
   test(
-    "fx ask permits a child to create a nested canonical child",
+    "ax ask permits a child to create a nested canonical child",
     async () => {
       const root = createIsolatedRoot();
       const childPrompt = "Create one nested child and report its admitted handle.";
@@ -4088,7 +4088,7 @@ describe("effect-aware command permissions", () => {
   );
 
   test(
-    "fx ask nested child receives periodic grandchild delivery at the next available step",
+    "ax ask nested child receives periodic grandchild delivery at the next available step",
     async () => {
       const root = createIsolatedRoot();
       const childPrompt = "NESTED_DELIVERY_CHILD_PROMPT";
@@ -4670,7 +4670,7 @@ describe("effect-aware command permissions", () => {
   );
 
   test.skipIf(!tmuxAvailable())(
-    "interactive fx delivers a child approval to the next same-turn parent step",
+    "interactive ax delivers a child approval to the next same-turn parent step",
     async () => {
       const root = createIsolatedRoot();
       const stderrPath = join(root.root, "interactive-child-approval-stderr.log");
@@ -4848,7 +4848,7 @@ describe("effect-aware command permissions", () => {
   );
 
   test.skipIf(!tmuxAvailable())(
-    "interactive fx lets a child continue after repeated advisory cautions",
+    "interactive ax lets a child continue after repeated advisory cautions",
     async () => {
       const root = createIsolatedRoot();
       const stderrPath = join(root.root, "interactive-child-auto-approval-stderr.log");
@@ -5622,7 +5622,7 @@ describe("effect-aware command permissions", () => {
   );
 
   test(
-    "fx ask yolo executes pwd through the default user profile without an artifact",
+    "ax ask yolo executes pwd through the default user profile without an artifact",
     async () => {
       const root = createIsolatedRoot();
       const gateway = startFakeGateway([toolCall("pwd"), finalText("ask direct complete")]);
@@ -5660,7 +5660,7 @@ describe("effect-aware command permissions", () => {
   );
 
   test(
-    "fx ask defaults missing permission mode to auto through the classifier",
+    "ax ask defaults missing permission mode to auto through the classifier",
     async () => {
       const root = createIsolatedRoot();
       const marker = join(root.workspace, "classifier-accepted.txt");
@@ -5726,7 +5726,7 @@ describe("effect-aware command permissions", () => {
   );
 
   test(
-    "fx ask does not retry a malformed classifier completion and safely replans",
+    "ax ask does not retry a malformed classifier completion and safely replans",
     async () => {
       const root = createIsolatedRoot();
       const marker = join(root.workspace, "classifier-malformed-must-not-run.txt");
@@ -5773,7 +5773,7 @@ describe("effect-aware command permissions", () => {
   );
 
   test(
-    "fx ask returns one malformed classifier completion to the agent without execution",
+    "ax ask returns one malformed classifier completion to the agent without execution",
     async () => {
       const root = createIsolatedRoot();
       const marker = join(root.workspace, "classifier-fallback-must-not-exist.txt");
@@ -5818,7 +5818,7 @@ describe("effect-aware command permissions", () => {
   );
 
   test(
-    "fx ask provider failure never executes or enters malformed recovery",
+    "ax ask provider failure never executes or enters malformed recovery",
     async () => {
       const root = createIsolatedRoot();
       const marker = join(root.workspace, "classifier-provider-must-not-exist.txt");
@@ -5867,7 +5867,7 @@ describe("effect-aware command permissions", () => {
   );
 
   test(
-    "fx ask SIGINT during classifier wait terminates before decision or execution",
+    "ax ask SIGINT during classifier wait terminates before decision or execution",
     async () => {
       const root = createIsolatedRoot();
       const marker = join(root.workspace, "classifier-cancel-must-not-exist.txt");
@@ -5913,7 +5913,7 @@ describe("effect-aware command permissions", () => {
         const result = await Promise.race([
           closed,
           Bun.sleep(2_000).then(() => {
-            throw new Error("fx did not exit on SIGINT while the classifier remained blocked");
+            throw new Error("ax did not exit on SIGINT while the classifier remained blocked");
           }),
         ]);
         expect(result).toEqual({ code: null, signal: "SIGINT" });
@@ -5944,7 +5944,7 @@ describe("effect-aware command permissions", () => {
   );
 
   test(
-    "fx ask automatic review receives the exact delegated command",
+    "ax ask automatic review receives the exact delegated command",
     async () => {
       const root = createIsolatedRoot();
       const marker = join(root.workspace, "delegated-agent-ran.txt");
@@ -5998,15 +5998,15 @@ describe("effect-aware command permissions", () => {
   );
 
   test.skipIf(!tmuxAvailable())(
-    "fx ask terminal automatic caution returns advice without prompting",
+    "ax ask terminal automatic caution returns advice without prompting",
     async () => {
       const root = createIsolatedRoot();
-      const marker = join(root.workspace, "fx-ask-prompt-approved.txt");
+      const marker = join(root.workspace, "ax-ask-prompt-approved.txt");
       const command = `printf approved > ${JSON.stringify(marker)}`;
       const gateway = startFakeGateway(
         [
           toolCall(command),
-          finalText("fx ask prompt complete"),
+          finalText("ax ask prompt complete"),
         ],
         { classifierDecision: "caution" },
       );
@@ -6024,7 +6024,7 @@ describe("effect-aware command permissions", () => {
         height: 40,
         remainOnExit: true,
       });
-      const finalPane = await activeSession.waitForText("fx ask prompt complete", TIMEOUT);
+      const finalPane = await activeSession.waitForText("ax ask prompt complete", TIMEOUT);
       expect(finalPane).not.toContain("Approve? [y/N]");
       expect(finalPane).not.toContain("Auto agent denied");
       expect(existsSync(marker)).toBe(false);
@@ -6044,7 +6044,7 @@ describe("effect-aware command permissions", () => {
   );
 
   test(
-    "fx ask and ACP send large automatic review packets before execution",
+    "ax ask and ACP send large automatic review packets before execution",
     async () => {
       const cliRoot = createIsolatedRoot();
       const cliMarker = "large-cli-marker";
@@ -6122,7 +6122,7 @@ describe("effect-aware command permissions", () => {
   );
 
   test(
-    "fx ask projects hostile ls filenames through the default user profile",
+    "ax ask projects hostile ls filenames through the default user profile",
     async () => {
       const root = createIsolatedRoot();
       const gateway = startFakeGateway([toolCall("ls"), finalText("ask ls complete")]);
@@ -6154,7 +6154,7 @@ describe("effect-aware command permissions", () => {
   );
 
   test(
-    "fx ask preserves quoted shell metacharacters through the user profile",
+    "ax ask preserves quoted shell metacharacters through the user profile",
     async () => {
       const root = createIsolatedRoot();
       const gateway = startFakeGateway([
@@ -6188,7 +6188,7 @@ describe("effect-aware command permissions", () => {
   );
 
   test(
-    "fx ask keeps parser hardening cases approval-bearing",
+    "ax ask keeps parser hardening cases approval-bearing",
     async () => {
       const commands = [
         "wc -c < input.txt",
@@ -6225,7 +6225,7 @@ describe("effect-aware command permissions", () => {
   );
 
   test(
-    "fx ask blocks approval-bearing commands before side effects",
+    "ax ask blocks approval-bearing commands before side effects",
     async () => {
       const root = createIsolatedRoot();
       const marker = join(root.workspace, "must-not-exist");
@@ -6253,7 +6253,7 @@ describe("effect-aware command permissions", () => {
   );
 
   test(
-    "fx ask blocks hostile git before any executable or repository access",
+    "ax ask blocks hostile git before any executable or repository access",
     async () => {
       const root = createIsolatedRoot();
       const gateway = startFakeGateway([

@@ -134,7 +134,7 @@ function createRoot(
   scriptPath: string,
   options: RootOptions = {},
 ): FixtureRoot {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), `fx-mcp-${label}-`)));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), `ax-mcp-${label}-`)));
   cleanupRoot = root;
   const home = join(root, "home");
   const workspace = join(root, "workspace");
@@ -302,8 +302,8 @@ function preserveStdioFailure(
 ): void {
   if (result.code === 0) return;
   cleanupRoot = null;
-  writeFileSync(join(root.root, "fx-stdout.log"), result.stdout);
-  writeFileSync(join(root.root, "fx-stderr.log"), result.stderr);
+  writeFileSync(join(root.root, "ax-stdout.log"), result.stdout);
+  writeFileSync(join(root.root, "ax-stderr.log"), result.stderr);
   writeFileSync(
     join(root.root, "failure.json"),
     JSON.stringify({
@@ -313,7 +313,7 @@ function preserveStdioFailure(
       gatewayRequests: activeGateway.requests.map((request) => request.body),
     }, null, 2),
   );
-  throw new Error(`fx ${label} failed; retained artifacts: ${root.root}`);
+  throw new Error(`ax ${label} failed; retained artifacts: ${root.root}`);
 }
 
 function isProcessAlive(pid: number): boolean {
@@ -380,7 +380,7 @@ describe("modern MCP stdio compatibility", () => {
       expect(approval).toContain("Allow this MCP tool call?");
       expect(approval).toContain(TOOL_NAME);
       expect(approval).toContain(
-        "This MCP tool needs approval before fx can send the request.",
+        "This MCP tool needs approval before ax can send the request.",
       );
       expect(approval).toContain("3. Deny");
       expect(
@@ -406,7 +406,7 @@ describe("modern MCP stdio compatibility", () => {
   );
 
   test("repository-local MCP configuration never launches a process or network request", async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-mcp-project-trust-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-mcp-project-trust-")));
     cleanupRoot = root;
     const home = join(root, "home");
     const workspace = join(root, "workspace");
@@ -985,7 +985,7 @@ describe("modern MCP stdio compatibility", () => {
     await expectFixtureProcessesExited(wire);
   }, 30_000);
 
-  test("fx ask uses typed Resources Prompts and Completion flows", async () => {
+  test("ax ask uses typed Resources Prompts and Completion flows", async () => {
     const root = createRoot("ask-features", MODERN_FIXTURE, {
       mode: "features",
     });
@@ -1126,7 +1126,7 @@ describe("modern MCP stdio compatibility", () => {
     await expectFixtureProcessesExited(wire);
   }, 30_000);
 
-  test("fx ask cancels a bounded stalled resource read", async () => {
+  test("ax ask cancels a bounded stalled resource read", async () => {
     const root = createRoot("ask-feature-cancel", MODERN_FIXTURE, {
       mode: "features",
       operationTimeoutMs: 200,
@@ -1553,7 +1553,7 @@ describe("modern MCP stdio compatibility", () => {
   }, 15_000);
 
   test("a blocked write recovers before the next unsent runtime call", async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-mcp-runtime-recovery-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-mcp-runtime-recovery-")));
     cleanupRoot = root;
     const proc = Bun.spawn(
       [
@@ -1600,7 +1600,7 @@ describe("modern MCP stdio compatibility", () => {
   test("catalog waits preserve operation timeout and cancellation", async () => {
     for (const control of ["timeout", "cancel"] as const) {
       const root = realpathSync(
-        mkdtempSync(join(tmpdir(), `fx-mcp-catalog-${control}-`)),
+        mkdtempSync(join(tmpdir(), `ax-mcp-catalog-${control}-`)),
       );
       cleanupRoot = root;
       const proc = Bun.spawn(
@@ -1648,7 +1648,7 @@ describe("modern MCP stdio compatibility", () => {
   test("stalled recovery preserves startup timeout and local cancellation", async () => {
     for (const control of ["timeout", "cancel"] as const) {
       const root = realpathSync(
-        mkdtempSync(join(tmpdir(), `fx-mcp-recovery-${control}-`)),
+        mkdtempSync(join(tmpdir(), `ax-mcp-recovery-${control}-`)),
       );
       cleanupRoot = root;
       const proc = Bun.spawn(
@@ -1693,7 +1693,7 @@ describe("modern MCP stdio compatibility", () => {
   }, 30_000);
 
   test("concurrent server recovery preserves whole-runtime tool-name uniqueness", async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-mcp-recovery-collision-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-mcp-recovery-collision-")));
     cleanupRoot = root;
     const proc = Bun.spawn(
       [
@@ -1739,7 +1739,7 @@ describe("modern MCP stdio compatibility", () => {
   }, 30_000);
 
   test("a failed reconnect leaves the remaining restart budget reachable", async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-mcp-recovery-budget-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-mcp-recovery-budget-")));
     cleanupRoot = root;
     const proc = Bun.spawn(
       [
@@ -1782,7 +1782,7 @@ describe("modern MCP stdio compatibility", () => {
   }, 30_000);
 
   test("a queued stale tool cannot cross a recovered connection generation", async () => {
-    const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-mcp-stale-recovery-")));
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-mcp-stale-recovery-")));
     cleanupRoot = root;
     const proc = Bun.spawn(
       [
@@ -1856,7 +1856,7 @@ describe("modern MCP stdio compatibility", () => {
       },
     ] as const
   ) {
-    test(`fx ask calls the ${fixture.label} stdio fixture`, async () => {
+    test(`ax ask calls the ${fixture.label} stdio fixture`, async () => {
       const root = createRoot(`ask-${fixture.label}`, fixture.path, {
         recordLaunchAttempts: true,
       });
@@ -1945,7 +1945,7 @@ describe("modern MCP stdio compatibility", () => {
     await expectFixtureProcessesExited(readWire(root.wireLogPath));
   }, 30_000);
 
-  test("fx ask does not start an unused optional MCP server", async () => {
+  test("ax ask does not start an unused optional MCP server", async () => {
     const root = createRoot("ask-unused-optional", MODERN_FIXTURE, {
       recordLaunchAttempts: true,
     });
@@ -1972,7 +1972,7 @@ describe("modern MCP stdio compatibility", () => {
     expect(existsSync(root.wireLogPath)).toBe(false);
   }, 15_000);
 
-  test("fx ask accepts the official legacy SDK Draft 7 tool schema", async () => {
+  test("ax ask accepts the official legacy SDK Draft 7 tool schema", async () => {
     const root = createRoot("ask-legacy-draft7", LEGACY_FIXTURE, {
       mode: "draft7_schema",
     });
@@ -2003,7 +2003,7 @@ describe("modern MCP stdio compatibility", () => {
     await expectFixtureProcessesExited(wire);
   });
 
-  test("fx ask rejects invalid legacy Draft 7 arguments before transport", async () => {
+  test("ax ask rejects invalid legacy Draft 7 arguments before transport", async () => {
     const root = createRoot("ask-legacy-draft7-invalid", LEGACY_FIXTURE, {
       mode: "draft7_schema",
       draft7Pattern: "^\\S+$",
@@ -2034,7 +2034,7 @@ describe("modern MCP stdio compatibility", () => {
     await expectFixtureProcessesExited(wire);
   });
 
-  test("fx ask routes legacy stdio progress", async () => {
+  test("ax ask routes legacy stdio progress", async () => {
     const root = createRoot("ask-legacy-progress", LEGACY_FIXTURE, {
       mode: "progress",
     });
@@ -2059,7 +2059,7 @@ describe("modern MCP stdio compatibility", () => {
     await expectFixtureProcessesExited(wire);
   }, 30_000);
 
-  test("noninteractive fx ask returns typed input-required without fabricating a continuation", async () => {
+  test("noninteractive ax ask returns typed input-required without fabricating a continuation", async () => {
     const root = createRoot("ask-mrtr", MODERN_FIXTURE, {
       mode: "mrtr_input_required",
     });
@@ -2700,7 +2700,7 @@ describe("modern MCP stdio compatibility", () => {
   }, 30_000);
 
   test.skipIf(!tmuxAvailable())(
-    "interactive fx ask validates and submits a modern MCP form elicitation",
+    "interactive ax ask validates and submits a modern MCP form elicitation",
     async () => {
       const root = createRoot("ask-interactive-mrtr", MODERN_FIXTURE, {
         mode: "mrtr_input_required",
@@ -2753,7 +2753,7 @@ describe("modern MCP stdio compatibility", () => {
 
   for (const legacyVersion of ["2025-06-18", "2025-11-25"] as const) {
     test.skipIf(!tmuxAvailable())(
-      `interactive fx ask handles negotiated ${legacyVersion} direct elicitation/create`,
+      `interactive ax ask handles negotiated ${legacyVersion} direct elicitation/create`,
       async () => {
         const root = createRoot(`ask-legacy-direct-${legacyVersion}`, LEGACY_FIXTURE, {
           mode: "direct_form",
@@ -3181,7 +3181,7 @@ describe("modern MCP stdio compatibility", () => {
   }
 
   test.skipIf(!tmuxAvailable())(
-    "interactive fx ask validates Unicode patterns, edits, and submits every form field kind",
+    "interactive ax ask validates Unicode patterns, edits, and submits every form field kind",
     async () => {
       const root = createRoot("ask-interactive-full-form", MODERN_FIXTURE, {
         mode: "mrtr_full_form",
@@ -3295,7 +3295,7 @@ describe("modern MCP stdio compatibility", () => {
   );
 
   test.skipIf(!tmuxAvailable())(
-    "interactive fx ask retries a URL browser failure without prefetching",
+    "interactive ax ask retries a URL browser failure without prefetching",
     async () => {
       let targetRequests = 0;
       const target = Bun.serve({
@@ -3378,7 +3378,7 @@ describe("modern MCP stdio compatibility", () => {
   );
 
   test.skipIf(!tmuxAvailable())(
-    "interactive fx ask can refuse a URL without launching a browser",
+    "interactive ax ask can refuse a URL without launching a browser",
     async () => {
       let targetRequests = 0;
       const target = Bun.serve({
@@ -3443,7 +3443,7 @@ describe("modern MCP stdio compatibility", () => {
     35_000,
   );
 
-  test("fx ask routes progress and times out a stalled operation without leaking its child", async () => {
+  test("ax ask routes progress and times out a stalled operation without leaking its child", async () => {
     const progressRoot = createRoot("ask-progress", MODERN_FIXTURE, {
       mode: "progress",
     });
@@ -3498,7 +3498,7 @@ describe("modern MCP stdio compatibility", () => {
     await expectFixtureProcessesExited(timeoutWire);
   }, 45_000);
 
-  test("fx ask bounds startup timeouts and reaps every attempted child", async () => {
+  test("ax ask bounds startup timeouts and reaps every attempted child", async () => {
     const root = createRoot("ask-startup-timeout", MODERN_FIXTURE, {
       mode: "stall_startup",
       startupTimeoutMs: 50,
@@ -3587,7 +3587,7 @@ describe("modern MCP stdio compatibility", () => {
     25_000,
   );
 
-  test("required profile startup failure blocks fx ask before any Gateway request", async () => {
+  test("required profile startup failure blocks ax ask before any Gateway request", async () => {
     const root = createRoot("ask-required-startup-timeout", MODERN_FIXTURE, {
       mode: "stall_startup",
       startupTimeoutMs: 50,
@@ -4470,7 +4470,7 @@ describe("modern MCP stdio compatibility", () => {
     45_000,
   );
 
-  test("fx ask performs one fresh-discovery restart without replaying the failed call", async () => {
+  test("ax ask performs one fresh-discovery restart without replaying the failed call", async () => {
     const root = createRoot("ask-restart", MODERN_FIXTURE, {
       mode: "crash_once",
       restartLimit: 1,
@@ -4515,7 +4515,7 @@ describe("modern MCP stdio compatibility", () => {
 
   for (const childMode of ["one_off", "persistent"] as const) {
     test(`revoked ${childMode} authority prevents stdio recovery effects`, async () => {
-      const root = realpathSync(mkdtempSync(join(tmpdir(), `fx-mcp-${childMode}-recovery-`)));
+      const root = realpathSync(mkdtempSync(join(tmpdir(), `ax-mcp-${childMode}-recovery-`)));
       cleanupRoot = root;
       const proc = Bun.spawn(
         [
@@ -4589,7 +4589,7 @@ describe("modern MCP stdio compatibility", () => {
     }, 30_000);
   }
 
-  test("fx ask stops restarting after the configured stdio budget", async () => {
+  test("ax ask stops restarting after the configured stdio budget", async () => {
     const root = createRoot("ask-restart-limit", MODERN_FIXTURE, {
       mode: "crash_always",
       restartLimit: 1,

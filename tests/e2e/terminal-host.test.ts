@@ -2908,7 +2908,7 @@ test.skipIf(!tmuxAvailable())("revision four client cannot opt into Part 8 tmux 
 }, 15_000);
 
 test.skipIf(!tmuxAvailable() || process.platform !== "linux")(
-  "terminal helpers keep running after the on-disk fx binary is replaced",
+  "terminal helpers keep running after the on-disk ax binary is replaced",
   async () => {
     if (!existsSync("/bin/zsh")) return;
     const home = makeHome();

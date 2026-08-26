@@ -19,7 +19,7 @@ fn productionPathForReexec(alloc: Allocator) ![]u8 {
     return std.process.executablePathAlloc(io_mod.getIo(), alloc);
 }
 
-/// Returns an owned path another process can use to launch fx. Linux prefers
+/// Returns an owned path another process can use to launch ax. Linux prefers
 /// the on-disk path, falling back to `/proc/<pid>/exe` after replacement.
 pub fn pathForPeerReexec(alloc: Allocator) ![]u8 {
     if (testProductExe()) |path| return alloc.dupe(u8, path);
@@ -125,7 +125,7 @@ test "on-disk probe rejects a replaced binary so the peer path falls back" {
     defer tmp.cleanup();
     const dir_path = try io_mod.dirRealpathAlloc(alloc, tmp.dir, ".");
     defer alloc.free(dir_path);
-    const victim = try std.fs.path.join(alloc, &.{ dir_path, "fx-probe" });
+    const victim = try std.fs.path.join(alloc, &.{ dir_path, "ax-probe" });
     defer alloc.free(victim);
 
     {
