@@ -20,6 +20,7 @@ const app_entry_runtime = @import("core/app/app_entry_runtime.zig");
 const acp_runner = @import("core/cli/acp_runner.zig");
 const acp_server = @import("acp/server.zig");
 const app_input_runtime = @import("core/app/app_input_runtime.zig");
+const input_submit_runtime = @import("core/app/input_submit_runtime.zig");
 const core_input_runtime = @import("core/input/runtime.zig");
 const input_queue_runtime = @import("core/app/input_queue_runtime.zig");
 const app_bootstrap_runtime = @import("core/app/app_bootstrap_runtime.zig");
@@ -117,6 +118,7 @@ const session_child_store = @import("core/session/session_child_store.zig");
 const session_log = @import("core/session/session_log.zig");
 const builtin_tools = @import("builtins/tools.zig");
 const browser_workspace_tools = @import("builtins/browser_workspace_tools.zig");
+const browser_capabilities = @import("core/hosts/browser_capabilities.zig");
 const tool_admission = @import("core/tooling/tool_admission.zig");
 const tool_projection = @import("core/tooling/tool_projection.zig");
 const command_output_content = @import("core/tooling/command_output_content.zig");
@@ -377,6 +379,7 @@ const App = struct {
     const HostConfigAppRuntime = app_host_config_runtime.Runtime(Self);
     const BootstrapAppRuntime = app_bootstrap_runtime.Runtime(Self);
     const InputAppRuntime = app_input_runtime.Runtime(Self);
+    const InputSubmitRuntime = input_submit_runtime.SubmitRuntime(Self);
     const NotificationAppRuntime = app_notification_runtime.Runtime(
         Self,
         builtin_hooks.notifications.provider(Self),
@@ -609,6 +612,7 @@ const App = struct {
     input_runtime: InputRuntime = .{},
     terminal_input_runtime: TerminalInputRuntime = .{},
     queued_prompt_review: input_queue_runtime.State = .{},
+    submission: input_submit_runtime.State = .{},
     pending_images: std.ArrayList(types.ImageAttachment) = .empty,
     next_image_id: usize = 1,
     shell: TranscriptRuntime = .{},
@@ -897,6 +901,7 @@ const App = struct {
         };
         self.terminal_client.deinit();
         self.model_cache.deinit();
+        InputSubmitRuntime.clearPendingSubmission(self, "shutdown");
         const resume_handoff = if (capture_resume_handoff and
             direct_deinit_disposition == .settled)
             SessionAppRuntime.finalizePersistenceWithResumeHandoff(self)
@@ -1176,6 +1181,69 @@ const App = struct {
         return true;
     }
 
+    pub fn adoptPendingUserPrompt(
+        self: *App,
+        draft: *const worker_runtime.QueuedPromptDraft,
+    ) !void {
+        try self.writeUserPromptCardWithSkillBindings(
+            .{ .text = draft.prompt, .images = draft.images },
+            &.{},
+            draft.skill_display_spans,
+        );
+    }
+
+    pub fn finalizePendingSubmission(
+        self: *App,
+        draft: *const worker_runtime.QueuedPromptDraft,
+    ) !void {
+        const context_targets = if (self.context_enabled)
+            try context_contract.applicableTargetsForImages(self.alloc, draft.images)
+        else
+            &.{};
+        defer if (context_targets.len > 0) self.alloc.free(context_targets);
+        try AgentAppRuntime.refreshProjectContext(self, context_targets);
+        self.session.setConversationLanguageFromUserMessage(draft.prompt);
+
+        const skill_tokens = try promptCardSkillTokensFromDisplaySpans(
+            self.alloc,
+            draft.skill_display_spans,
+        );
+        defer if (skill_tokens.len > 0) self.alloc.free(skill_tokens);
+        if (!try self.snapshotAndQueuePrompt(
+            draft.prompt,
+            skill_tokens,
+            null,
+            null,
+            draft.images,
+            draft.turn_id,
+            true,
+        )) return error.PendingPromptQueueRejected;
+        WorkerAppRuntime.syncState(
+            self,
+            app_callbacks.Bindings(App).worker_tool_lifecycle_presenter(self),
+        );
+    }
+
+    pub fn notePendingFrameCommitted(self: *App) void {
+        InputSubmitRuntime.noteCommittedFrame(self);
+    }
+
+    pub fn acceptPresentedPrompt(self: *App, turn_id: u64) !void {
+        try InputSubmitRuntime.acceptPresentedPrompt(self, turn_id);
+    }
+
+    pub fn cancelPendingSubmission(self: *App) bool {
+        return InputSubmitRuntime.cancelPendingSubmission(self);
+    }
+
+    pub fn clearPendingSubmission(self: *App, reason: []const u8) void {
+        InputSubmitRuntime.clearPendingSubmission(self, reason);
+    }
+
+    pub fn clearPendingSubmissionForSessionTransition(self: *App) void {
+        InputSubmitRuntime.clearPendingSubmissionForSessionTransition(self);
+    }
+
     pub fn writeUserPromptCard(self: *App, user: types.UserTurn) !void {
         try self.writeUserPromptCardWithSpacing(user, self.session.historyLen() > 0);
     }
@@ -1308,6 +1376,9 @@ const App = struct {
             skill_tokens,
             review_draft,
             null,
+            null,
+            0,
+            false,
         );
     }
 
@@ -1324,6 +1395,9 @@ const App = struct {
             &.{},
             null,
             checkpoint,
+            null,
+            checkpoint.turn_id,
+            false,
         )) return false;
         WorkerAppRuntime.syncState(
             self,
@@ -1338,8 +1412,18 @@ const App = struct {
         skill_tokens: []const registered_entities.SkillTokenSpan,
         review_draft: ?worker_runtime.QueueReviewDraft,
         recovery_checkpoint: ?*const session_codec.RecoveryCheckpoint,
+        prompt_images: ?[]const types.ImageAttachment,
+        turn_id: u64,
+        user_prompt_already_presented: bool,
     ) !bool {
         try self.reloadSkills();
+
+        const source_images = if (recovery_checkpoint) |checkpoint|
+            checkpoint.user.images
+        else if (prompt_images) |images|
+            images
+        else
+            self.pending_images.items;
 
         const prompt_copy = try std.heap.c_allocator.dupe(u8, prompt);
         errdefer std.heap.c_allocator.free(prompt_copy);
@@ -1364,10 +1448,7 @@ const App = struct {
 
         const authorized_image_catalog = try self.session.snapshotImageCatalog(
             std.heap.c_allocator,
-            if (recovery_checkpoint) |checkpoint|
-                checkpoint.user.images
-            else
-                self.pending_images.items,
+            source_images,
         );
         errdefer types.freeImageAttachmentSlice(std.heap.c_allocator, authorized_image_catalog);
 
@@ -1382,10 +1463,7 @@ const App = struct {
 
         const images_copy = try types.dupeImageAttachmentSlice(
             std.heap.c_allocator,
-            if (recovery_checkpoint) |checkpoint|
-                checkpoint.user.images
-            else
-                self.pending_images.items,
+            source_images,
         );
         errdefer types.freeImageAttachmentSlice(std.heap.c_allocator, images_copy);
 
@@ -1425,7 +1503,7 @@ const App = struct {
             );
 
         try self.worker.enqueuePrompt(std.heap.c_allocator, .{
-            .turn_id = if (recovery_checkpoint) |checkpoint| checkpoint.turn_id else 0,
+            .turn_id = if (recovery_checkpoint) |checkpoint| checkpoint.turn_id else turn_id,
             .prompt = prompt_copy,
             .images = images_copy,
             .authorized_image_catalog = authorized_image_catalog,
@@ -1445,6 +1523,7 @@ const App = struct {
             .context_snapshot = context_snapshot_copy,
             .recovery_checkpoint = recovery_checkpoint_copy,
             .recovery_source_already_presented = recovery_checkpoint != null,
+            .user_prompt_already_presented = user_prompt_already_presented,
         });
         HerdrAppRuntime.reportWorking(self);
         return true;
@@ -1568,7 +1647,7 @@ const App = struct {
         return self.mcp.callTool(arena, name, arguments_json, max_tool_result_bytes, options);
     }
 
-    pub fn searchMcpTools(self: *App, arena: Allocator, query: []const u8, limit: usize, permission_rules: types.PermissionRuleSet, access: tool_mcp_runtime.Access) !tool_mcp_runtime.SearchResult {
+    pub fn searchMcpTools(self: *App, arena: Allocator, query: *const tool_mcp_runtime.PreparedQuery, limit: usize, permission_rules: types.PermissionRuleSet, access: tool_mcp_runtime.Access) !tool_mcp_runtime.SearchResult {
         return self.mcp.searchTools(arena, query, limit, permission_rules, self.context_limits, access);
     }
 
@@ -2016,6 +2095,12 @@ const App = struct {
 
     pub fn appendStaticContextMessage(self: *App, arena: Allocator, messages: *std.ArrayList(ChatMessage)) !void {
         try AgentAppRuntime.appendStaticContextMessage(self, arena, messages, &ignored_list_entries, max_list_entries, max_read_file_bytes, max_read_file_lines, max_read_file_line_len, max_command_output_bytes, builtin_gateway.retry_count, builtin_gateway.defaultChatUrl());
+        if (comptime host_target.is_wasm) {
+            try messages.append(arena, .{
+                .role = .system,
+                .content = browser_capabilities.model_context,
+            });
+        }
     }
 
     fn runtimeContextSnapshot(self: *App, alloc: Allocator) !RuntimeContextSnapshot {
@@ -2602,6 +2687,7 @@ const App = struct {
     pub fn loopCollectFacts(ctx: *anyopaque) !void {
         const self: *App = @ptrCast(@alignCast(ctx));
         if (!try WorkerAppRuntime.authorizeInteractiveAdmission(self)) return;
+        InputSubmitRuntime.collectPendingSubmissionFacts(self);
 
         if (!self.terminal_takeover.blocksFxSurface(&self.terminal)) {
             try self.collectThemeFacts();

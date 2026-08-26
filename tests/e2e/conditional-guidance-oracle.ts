@@ -13,9 +13,9 @@ export const CANONICAL_BUILTIN_NAMES = [
   "create_folder",
   "terminal",
   "subagent",
+  "capability_search",
   "skill",
   "install_skill",
-  "mcp_search_tools",
   "mcp_select_tool",
   "mcp_features",
   "memory",
@@ -151,7 +151,7 @@ function isCanonicalBuiltin(name: string): boolean {
 
 function isFxOwnedSystemText(text: string): boolean {
   return text.startsWith("# Identity and context\n") ||
-    /^You are a (?:read-only )?(?:Explore|Plan|Verify|Web) subagent inside fx\./.test(text) ||
+    /^You are a (?:read-only )?(?:Explore|Plan|Verify|Web) subagent inside ax\./.test(text) ||
     text === WEB_SEARCH_GUIDANCE ||
     text.startsWith("<fx-turn-context>") ||
     text.startsWith("Runtime context:");

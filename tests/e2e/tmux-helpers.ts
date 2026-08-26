@@ -890,7 +890,7 @@ export class TmuxSession {
   }
 
   /**
-   * Complete pane history including the ANSI sequences emitted by fx.
+   * Complete pane history including the ANSI sequences emitted by ax.
    * Keep this separate from the viewport capture so transcript-order tests
    * inspect all committed output rather than only the visible rows.
    */
@@ -912,7 +912,7 @@ export class TmuxSession {
 
   /**
    * Current pane title, which is what a terminal renders as the tab label.
-   * fx sets it through OSC 2, so this reads back what the user would see.
+   * ax sets it through OSC 2, so this reads back what the user would see.
    */
   async paneTitle(): Promise<string> {
     try {
@@ -930,7 +930,7 @@ export class TmuxSession {
   }
 
   /**
-   * Resize the tmux window. Delivers a real SIGWINCH to fx, exercising the
+   * Resize the tmux window. Delivers a real SIGWINCH to ax, exercising the
    * resize pipeline end-to-end. Default post-resize sleep covers the 100 ms
    * debounce in src/main.zig.
    */
@@ -1214,6 +1214,36 @@ export class TmuxSession {
     }
     throw new Error(
       `Timed out waiting for stable composer in ${this.name}.\nLast pane:\n${lastPane}`,
+    );
+  }
+
+  async waitForStableScrollback(
+    predicate: (scrollback: string) => boolean,
+    timeoutMs = 15_000,
+    stableMs = 100,
+  ): Promise<string> {
+    const deadline = Date.now() + timeoutMs;
+    let stableSince: number | null = null;
+    let previousScrollback = "";
+    let lastScrollback = "";
+    while (Date.now() < deadline) {
+      const scrollback = await this.captureFullScrollback();
+      lastScrollback = scrollback;
+      if (predicate(scrollback)) {
+        if (scrollback !== previousScrollback) {
+          previousScrollback = scrollback;
+          stableSince = Date.now();
+        } else if (stableSince !== null && Date.now() - stableSince >= stableMs) {
+          return scrollback;
+        }
+      } else {
+        previousScrollback = "";
+        stableSince = null;
+      }
+      await sleep(25);
+    }
+    throw new Error(
+      `Timed out waiting for stable scrollback in ${this.name}.\nLast scrollback:\n${lastScrollback}`,
     );
   }
 

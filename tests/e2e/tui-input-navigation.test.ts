@@ -1349,6 +1349,7 @@ tmuxTest(
     await active.waitForPane((pane) => pane.includes("turn 2 complete"), READY_TIMEOUT);
 
     await active.resizeWindow(88, 24);
+    await active.waitForText("turn 2 complete", READY_TIMEOUT);
     const resized = await active.captureFullScrollback();
     expect(resized).toContain("[Image 1] first turn");
     expect(resized).toContain("[Image 2] second turn");

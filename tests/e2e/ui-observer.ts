@@ -2,7 +2,7 @@
  * Deterministic UI observer runner.
  *
  * This is an inspection tool, not a golden test suite. It launches the
- * freshly built fx binary in tmux, arms one observer checkpoint, releases one
+ * freshly built ax binary in tmux, arms one observer checkpoint, releases one
  * fixture transition, and saves terminal plus replay artifacts for review.
  */
 import { execFileSync } from "node:child_process";
@@ -146,7 +146,7 @@ function isScenarioName(value: string | undefined): value is ScenarioName {
 }
 
 function createFixtureRoot(autoPermissions = false) {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), "fx-ui-observer-fixture-")));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "ax-ui-observer-fixture-")));
   const home = join(root, "home");
   const workspace = join(root, "workspace");
   mkdirSync(join(home, ".fx"), { recursive: true });
@@ -168,7 +168,7 @@ function createArtifactDir(keep: boolean): string {
     mkdirSync(configured, { recursive: true });
     return realpathSync(configured);
   }
-  const root = mkdtempSync(join(tmpdir(), "fx-ui-observer-"));
+  const root = mkdtempSync(join(tmpdir(), "ax-ui-observer-"));
   if (keep) return realpathSync(root);
   return root;
 }

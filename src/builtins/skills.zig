@@ -4,6 +4,7 @@ const debug_trace = @import("../core/shared/debug_trace.zig");
 const io_mod = @import("../core/shared/io.zig");
 const skill_commands = @import("../core/skills/skill_commands.zig");
 const skill_contract = @import("../core/skills/skill_contract.zig");
+const skill_runtime = @import("../core/skills/skill_runtime.zig");
 
 const Allocator = std.mem.Allocator;
 
@@ -36,6 +37,27 @@ pub const root_policy: skill_contract.RootPolicy = .{
     .managed_root_source = .global_fx,
     .global_roots = &global_roots,
 };
+
+pub fn loadVisibleSkillsForTool(
+    alloc: Allocator,
+    workspace_root: []const u8,
+    skills_dir: []const u8,
+) !skill_runtime.SkillDiscovery {
+    const home = io_mod.getenv("HOME") orelse homeFromSkillsDir(skills_dir);
+    return skill_runtime.loadVisibleSkills(
+        alloc,
+        workspace_root,
+        home,
+        skills_dir,
+        root_policy,
+    );
+}
+
+fn homeFromSkillsDir(skills_dir: []const u8) ?[]const u8 {
+    const suffix = "/.fx/skills";
+    if (!std.mem.endsWith(u8, skills_dir, suffix)) return null;
+    return skills_dir[0 .. skills_dir.len - suffix.len];
+}
 
 pub const InstallResult = skill_commands.InstallResult;
 
@@ -110,7 +132,7 @@ fn executeCommand(alloc: Allocator, command: Command, request: CommandRequest) !
         .remove => |name| removeCommandResult(alloc, request, name),
         .path => noticeFmt(
             alloc,
-            "fx workspace roots are auto-discovered from .fx/skills and skills/.\n" ++
+            "ax workspace roots are auto-discovered from .fx/skills and skills/.\n" ++
                 "ax managed install root: {s}\n" ++
                 "compatibility roots are auto-discovered from workspace and home (.opencode/.codex/.claude/.agents/.claw).",
             .{request.skills_dir},
@@ -1956,7 +1978,7 @@ test "built-in skills path reports native workspace roots" {
 
     switch (result) {
         .notice => |notice| try std.testing.expectEqualStrings(
-            "fx workspace roots are auto-discovered from .fx/skills and skills/.\n" ++
+            "ax workspace roots are auto-discovered from .fx/skills and skills/.\n" ++
                 "ax managed install root: /tmp/skills\n" ++
                 "compatibility roots are auto-discovered from workspace and home (.opencode/.codex/.claude/.agents/.claw).",
             notice.text,

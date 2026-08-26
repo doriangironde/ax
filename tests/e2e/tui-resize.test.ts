@@ -631,7 +631,7 @@ async function waitForSkillsMenuGrid(
   while (Date.now() < deadline) {
     last = await s.capturePaneGrid();
     const text = last.join("\n");
-    if (text.includes(`Skills ${count}`) && findSkillsScreen(last) !== null) {
+    if (text.includes(`Skills ${count}`) && findInlineSkillsPicker(last) !== null) {
       return last;
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -655,8 +655,7 @@ function expectSkillsMenuGrid(
   expect(text).toContain("ax · Global");
   expect(names.some((name) => text.includes(name))).toBe(true);
   expect(text).not.toContain("Visible skills (");
-  expect(text).not.toContain("Run /help for commands");
-  expect(findSkillsScreen(grid)).not.toBeNull();
+  expect(findInlineSkillsPicker(grid)).not.toBeNull();
   expect(grid.filter(isInputRow)).toHaveLength(1);
 }
 
@@ -1039,14 +1038,18 @@ function findFooter(grid: string[]): FooterBlock | null {
   return findFooterBlocks(grid).at(-1) ?? null;
 }
 
-function findSkillsScreen(grid: string[]): { topDivider: number; header: number; bottomDivider: number; hint: number } | null {
+function findInlineSkillsPicker(
+  grid: string[],
+): { input: number; topDivider: number; header: number; bottomDivider: number; hint: number } | null {
   const header = grid.findIndex((line) => line.includes("Skills "));
-  if (header <= 0 || !isDividerRow(grid[header - 1]!)) return null;
-  if (!isInputRow(grid[0]!)) return null;
+  if (header <= 1 || !isDividerRow(grid[header - 1]!)) return null;
+  const input = header - 2;
+  if (!isInputRow(grid[input]!)) return null;
   const bottomDivider = grid.findLastIndex((line) => isDividerRow(line));
   if (bottomDivider <= header || bottomDivider + 1 >= grid.length) return null;
   if (!grid[bottomDivider + 1]!.includes("Esc Close")) return null;
   return {
+    input,
     topDivider: header - 1,
     header,
     bottomDivider,
@@ -1165,8 +1168,12 @@ async function runLargeSkillResizeAttempt(attempt: number): Promise<string> {
       cycle.newSize.rows === shrinkRows
     );
     expect(shrinkCycle.historyRowDelta).toBeGreaterThanOrEqual(0);
-    expect(attemptLine(shrinkAttempt, "attempt_result ")).toBeUndefined();
-    expect(attemptLine(shrinkAttempt, "transcript_transition_finalize ")).toBeUndefined();
+    expect(attemptLine(shrinkAttempt, "attempt_result ")).toContain(
+      "shadow_state=committed",
+    );
+    expect(attemptLine(shrinkAttempt, "transcript_transition_finalize ")).toContain(
+      "body_disposition=paint",
+    );
     expect(attemptLine(shrinkAttempt, "tmux_clear_history_complete")).toBeUndefined();
     const shrinkGrid = await waitForSkillsMenuGrid(s, LARGE_SKILL_COUNT);
     expectSkillsMenuGrid(shrinkGrid, LARGE_SKILL_COUNT, fixture.names);
@@ -1186,8 +1193,12 @@ async function runLargeSkillResizeAttempt(attempt: number): Promise<string> {
       (candidate) => attemptHasReason(candidate, "resize"),
     );
     expect(s.paneSize()).toEqual({ cols: 120, rows: 34 });
-    expect(attemptLine(growAttempt, "attempt_result ")).toBeUndefined();
-    expect(attemptLine(growAttempt, "transcript_transition_commit ")).toBeUndefined();
+    expect(attemptLine(growAttempt, "attempt_result ")).toContain(
+      "shadow_state=committed",
+    );
+    expect(attemptLine(growAttempt, "transcript_transition_commit ")).toContain(
+      "state=stable",
+    );
     const growGrid = await waitForSkillsMenuGrid(s, LARGE_SKILL_COUNT);
     expectSkillsMenuGrid(growGrid, LARGE_SKILL_COUNT, fixture.names);
     const growScrollback = await s.captureFullScrollback();
@@ -1212,7 +1223,7 @@ async function runLargeSkillResizeAttempt(attempt: number): Promise<string> {
     const scrollbackLines = scrollback.replace(/\n$/, "").split("\n").length;
     expect(scrollbackLines).toBeLessThan(historyLimit / 2);
     expect(finalGrid.filter(isInputRow)).toHaveLength(1);
-    expect(findSkillsScreen(finalGrid)).not.toBeNull();
+    expect(findInlineSkillsPicker(finalGrid)).not.toBeNull();
     expect(s.paneStatus()).toEqual({ dead: false, status: null });
     expect(s.isPaneAlive()).toBe(true);
     expect(readFileSync(stderrPath, "utf8")).toBe("");
@@ -1344,19 +1355,31 @@ async function runRapidSkillResizeAttempt(
     expect(s.paneSize()).toEqual({ cols: 120, rows: 34 });
 
     const growCommit = attemptLine(grow.attempt, "transcript_transition_commit ");
-    expect(growCommit).toBeUndefined();
+    expect(growCommit).toContain("state=stable");
     const growGrid = await waitForSkillsMenuGrid(s, RAPID_SKILL_COUNT);
     expectSkillsMenuGrid(growGrid, RAPID_SKILL_COUNT, fixture.names);
     const growScrollback = await s.captureFullScrollback();
     expectNoTranscriptSkillInventory(growScrollback);
     writeFileSync(join(fixture.root, "scrollback-after-grow.txt"), growScrollback);
 
-    expect(attemptLine(shrink.attempt, "transcript_transition_finalize ")).toBeUndefined();
-    expect(attemptLine(grow.attempt, "transcript_transition_finalize ")).toBeUndefined();
-    expect(attemptLine(shrink.attempt, "attempt_result ")).toBeUndefined();
-    expect(attemptLine(grow.attempt, "attempt_result ")).toBeUndefined();
-    expect(attemptLine(shrink.attempt, "tmux_clear_history_complete")).toBeUndefined();
-    expect(attemptLine(grow.attempt, "tmux_clear_history_complete")).toBeUndefined();
+    expect(attemptLine(shrink.attempt, "transcript_transition_finalize ")).toContain(
+      "body_disposition=paint",
+    );
+    expect(attemptLine(grow.attempt, "transcript_transition_finalize ")).toContain(
+      "body_disposition=paint",
+    );
+    expect(attemptLine(shrink.attempt, "attempt_result ")).toContain(
+      "shadow_state=committed",
+    );
+    expect(attemptLine(grow.attempt, "attempt_result ")).toContain(
+      "shadow_state=committed",
+    );
+    expect(attemptLine(shrink.attempt, "tmux_clear_history_complete")).toContain(
+      "tmux_clear_history_complete",
+    );
+    expect(attemptLine(grow.attempt, "tmux_clear_history_complete")).toContain(
+      "tmux_clear_history_complete",
+    );
 
     await s.sendKeys("C-[");
     const dismissed = await s.waitForPane(
@@ -1375,7 +1398,7 @@ async function runRapidSkillResizeAttempt(
     const finalScrollback = await s.captureFullScrollback();
     expectNoTranscriptSkillInventory(finalScrollback);
     expect(finalGrid.filter(isInputRow)).toHaveLength(1);
-    expect(findSkillsScreen(finalGrid)).not.toBeNull();
+    expect(findInlineSkillsPicker(finalGrid)).not.toBeNull();
     expect(s.paneStatus()).toEqual({ dead: false, status: null });
     expect(s.isPaneAlive()).toBe(true);
     expect(readFileSync(stderrPath, "utf8")).toBe("");

@@ -479,7 +479,7 @@ fn recoveryActionForSessionDiagnostic(
         .invalid_commit_intent,
         => std.fmt.bufPrint(
             buffer,
-            "back up ~/.fx/sessions, then inspect this session with fx session {s} --json",
+            "back up ~/.fx/sessions, then inspect this session with ax session {s} --json",
             .{session_id},
         ),
 

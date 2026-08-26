@@ -3097,10 +3097,10 @@ fn mcpCallTool(raw_ctx: *anyopaque, arena: Allocator, name: []const u8, argument
     );
 }
 
-fn mcpSearchTools(raw_ctx: *anyopaque, arena: Allocator, query: []const u8, limit: usize, permission_rules: types.PermissionRuleSet, limits: config_runtime.context_limits.Values, access: tool_mcp_runtime.Access) anyerror!tool_mcp_runtime.SearchResult {
+fn mcpSearchTools(raw_ctx: *anyopaque, arena: Allocator, query: *const tool_mcp_runtime.PreparedQuery, limit: usize, permission_rules: types.PermissionRuleSet, limits: config_runtime.context_limits.Values, access: tool_mcp_runtime.Access) anyerror!tool_mcp_runtime.SearchResult {
     const ctx: *AskContext = @ptrCast(@alignCast(raw_ctx));
     const mcp = try activateAskMcp(ctx);
-    return mcp.searchTools(arena, query, limit, permission_rules, limits, access);
+    return mcp.searchToolsPrepared(arena, query, limit, permission_rules, limits, access);
 }
 
 fn mcpToolSchemaJson(raw_ctx: *anyopaque, arena: Allocator, name: []const u8, permission_rules: types.PermissionRuleSet, limits: config_runtime.context_limits.Values, access: tool_mcp_runtime.Access) anyerror!?tool_mcp_runtime.ToolSchemaResult {

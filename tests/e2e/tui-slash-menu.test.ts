@@ -2314,9 +2314,10 @@ describe.skipIf(SKIP)("tui: slash menu", () => {
   );
 
   test(
-    "inline completions stay in the composer while leading triggers open their menus",
+    "skill and completion menus stay inline with the composer",
     async () => {
       const fixture = createSkillsMenuFixture();
+      const tapePath = join(fixture.home, "dollar-inline.fxtape");
       session = await TmuxSession.create({
         cwd: fixture.workspace,
         env: {
@@ -2324,12 +2325,17 @@ describe.skipIf(SKIP)("tui: slash menu", () => {
           AI_GATEWAY_API_KEY: undefined,
           VERCEL_OIDC_TOKEN: undefined,
           FX_AUTO_UPGRADE: "0",
+          FX_RECORD: tapePath,
         },
         width: 120,
         height: 32,
         stderrPath: fixture.stderrPath,
       });
       await session.waitForComposer(10_000);
+      const alternateCount = (sequence: string) =>
+        countOccurrences(readFileSync(tapePath).toString("latin1"), sequence);
+      const entersBeforeSkills = alternateCount("\x1b[?1049h");
+      const leavesBeforeSkills = alternateCount("\x1b[?1049l");
 
       await session.sendKeys("-l '/sk'");
       await session.waitForText("browse and manage skills", 5_000);
@@ -2339,8 +2345,10 @@ describe.skipIf(SKIP)("tui: slash menu", () => {
       await session.sendKeys("Enter");
       grid = await waitForSkillsMenu(session, 4);
       const pane = grid.join("\n");
-      expect(pane).not.toContain("𝒂x");
-      expect(pane).not.toContain("Run /help for commands");
+expect(pane).toContain("𝒂x");
+      expect(pane).toContain("Run /help for commands");
+      expect(alternateCount("\x1b[?1049h")).toBe(entersBeforeSkills);
+      expect(alternateCount("\x1b[?1049l")).toBe(leavesBeforeSkills);
       expect(pane).toContain("[All]");
       expect(pane).toContain("Fx");
       expect(pane).toContain("Workspace");
@@ -2379,10 +2387,15 @@ describe.skipIf(SKIP)("tui: slash menu", () => {
         5_000,
       );
 
+      const entersBeforeDollar = alternateCount("\x1b[?1049h");
+      const leavesBeforeDollar = alternateCount("\x1b[?1049l");
+
       await session.sendLiteralText("$work");
       grid = await waitForSkillsMenu(session, 1);
       expect(composerContains(grid.join("\n"), "$work")).toBe(true);
-      expect(grid.join("\n")).not.toContain("𝒂x");
+expect(grid.join("\n")).toContain("𝒂x");
+      expect(alternateCount("\x1b[?1049h")).toBe(entersBeforeDollar);
+      expect(alternateCount("\x1b[?1049l")).toBe(leavesBeforeDollar);
       await session.sendKeys("C-[");
       await session.waitForPane(
         (current) =>
@@ -2391,6 +2404,8 @@ describe.skipIf(SKIP)("tui: slash menu", () => {
           !current.includes("↑↓ Navigate"),
         5_000,
       );
+      expect(alternateCount("\x1b[?1049h")).toBe(entersBeforeDollar);
+      expect(alternateCount("\x1b[?1049l")).toBe(leavesBeforeDollar);
       await session.sendKeys("C-u");
 
       await session.sendLiteralText(" $");
@@ -2519,7 +2534,7 @@ describe.skipIf(SKIP)("tui: slash menu", () => {
       await session.sendText("/skills");
       await waitForSkillsMenu(session, 4);
       await session.sendKeys("Tab");
-      await session.waitForText("[Fx]", 5_000);
+      await session.waitForText("[fx]", 5_000);
       await session.sendKeys("BTab");
       await session.waitForText("[All]", 5_000);
       await session.sendLiteralText("workspace");
@@ -2547,6 +2562,8 @@ describe.skipIf(SKIP)("tui: slash menu", () => {
 
       await session.sendKeys("C-[");
       await session.waitForPane((current) => !current.includes("↑↓ Navigate"), 5_000);
+      expect(alternateCount("\x1b[?1049h")).toBe(entersBeforeSkills);
+      expect(alternateCount("\x1b[?1049l")).toBe(leavesBeforeSkills);
       await session.sendKeys("C-u");
       await session.sendText("/quit");
       expect(await session.waitForSessionEnd(TIMEOUT)).toBe(true);
@@ -2577,7 +2594,7 @@ describe.skipIf(SKIP)("tui: slash menu", () => {
       await session.sendLiteralText("$");
       let grid = await waitForSkillsMenu(session, 220);
       const initialNames = visibleFxSkillNames(grid);
-      expect(initialNames.length).toBeGreaterThan(4);
+      expect(initialNames).toHaveLength(6);
 
       for (let i = 0; i < initialNames.length - 1; i += 1) {
         await session.sendKeys("Down");
@@ -2585,6 +2602,20 @@ describe.skipIf(SKIP)("tui: slash menu", () => {
 
       grid = await session.capturePaneGrid();
       expect(visibleFxSkillNames(grid)[0]).toBe(initialNames[0]);
+      expect(selectedSkillName(await session.capturePaneEscapes())).toBe(
+        initialNames[initialNames.length - 1],
+      );
+
+      await session.resizeWindow(72, 16);
+      grid = await waitForSkillsMenu(session, 220);
+      expect(visibleFxSkillNames(grid)).toHaveLength(4);
+      expect(selectedSkillName(await session.capturePaneEscapes())).toBe(
+        initialNames[initialNames.length - 1],
+      );
+
+      await session.resizeWindow(120, 28);
+      grid = await waitForSkillsMenu(session, 220);
+      expect(visibleFxSkillNames(grid)).toHaveLength(6);
       expect(selectedSkillName(await session.capturePaneEscapes())).toBe(
         initialNames[initialNames.length - 1],
       );
@@ -2900,7 +2931,7 @@ describe.skipIf(SKIP)("tui: slash menu", () => {
   );
 
   test(
-    "Escape closes the skills catalog without cancelling an active stream",
+    "Escape closes the inline skills menu without cancelling an active stream",
     async () => {
       const fixture = createSkillsMenuFixture();
       const stream: HeldSkillStream = { cancelled: false };
@@ -2997,7 +3028,7 @@ describe.skipIf(SKIP)("tui: slash menu", () => {
   );
 
   test(
-    "file approval returns to the preserved skills catalog",
+    "file approval returns to the preserved inline skills menu",
     async () => {
       const fixture = createSkillsMenuFixture();
       const target = join(fixture.workspace, "catalog-approval.txt");

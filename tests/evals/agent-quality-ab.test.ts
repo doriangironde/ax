@@ -28,7 +28,7 @@ describe("agent quality A/B harness helpers", () => {
     expect(createTrialOrder(2)).toEqual(["baseline", "candidate"]);
   });
 
-  test("rejects bare fx and relative binary paths", () => {
+  test("rejects bare ax and relative binary paths", () => {
     expect(() => requireAbsoluteExecutableBinary("fx", "baseline")).toThrow(/absolute path/);
     expect(() => requireAbsoluteExecutableBinary("./zig-out/bin/ax", "candidate")).toThrow(/absolute path/);
   });

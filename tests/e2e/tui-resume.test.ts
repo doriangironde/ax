@@ -3178,7 +3178,12 @@ test.skipIf(!tmuxAvailable())(
       await active.sendKeys("3");
       await active.sendKeys("Enter");
       await active.waitForText("CTRL_O_HANDOFF_DONE", TIMEOUT);
-      const scrollback = await active.captureFullScrollback();
+      const scrollback = await active.waitForStableScrollback(
+        (value) =>
+          value.includes("CTRL_O_HANDOFF_DONE") &&
+          countOccurrences(value, priorSummary) === 1,
+        TIMEOUT,
+      );
       const inline = await active.capturePane();
       expect(inline).toContain("CTRL_O_HANDOFF_DONE");
       expect(inline).not.toContain("Apply this change?");

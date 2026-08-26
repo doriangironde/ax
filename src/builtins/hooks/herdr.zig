@@ -116,7 +116,7 @@ pub const Client = struct {
     }
 
     /// Remove ax from the pane on exit: drop the reported agent and clear the
-    /// label/name. Without this the pane keeps showing "fx" after fx is gone.
+    /// label/name. Without this the pane keeps showing "fx" after ax is gone.
     pub fn release(self: *Client) void {
         self.sendAll(&.{
             .{ .agent_rename = null },

@@ -340,7 +340,7 @@ test "possibly sent gateway failure marks billing incomplete" {
     try std.testing.expectEqual(@as(u64, 1), snapshot.settled_through_sequence);
 }
 
-test "provider-local immediate usage bypasses durable Gateway observations" {
+test "provider-local exact usage reaches session accounting" {
     const LocalProvider = struct {
         calls: usize = 0,
 
@@ -356,10 +356,21 @@ test "provider-local immediate usage bypasses durable Gateway observations" {
             return .{ .completed = .{
                 .completion = .{
                     .generation_id = "resp_provider_local",
+                    .billing = .{
+                        .created_at_ms = 1,
+                        .model = "codex/gpt-test",
+                        .total_cost = 0,
+                        .input_tokens = 3,
+                        .output_tokens = 1,
+                        .cache_read_tokens = 0,
+                        .cache_write_tokens = 0,
+                        .reasoning_tokens = null,
+                        .billable_web_search_calls = 0,
+                    },
                     .finish_reason = .stop,
                     .usage = .{ .input_tokens = 3, .output_tokens = 1 },
                 },
-                .usage = .{ .immediate = null },
+                .usage = .{ .exact = .codex },
             } };
         }
     };
@@ -378,45 +389,49 @@ test "provider-local immediate usage bypasses durable Gateway observations" {
     var cancel_flag = std.atomic.Value(bool).init(false);
     var callback_ctx: u8 = 0;
 
-    for (0..65) |_| {
-        var delivery = DeliveryCertainty.init();
-        var attempt_evidence: AttemptEvidence = .{};
-        var result = try streamModelCompletion(
-            provider,
-            alloc,
-            .{
-                .credential = .{
-                    .secret = "subscription-token",
-                    .source = .chatgpt_subscription,
-                    .account_id = "acct_test",
-                },
-                .session_id = "session-test",
-                .model = "gpt-test",
-                .retry_count = 1,
-                .messages = &.{},
-                .tool_choice = .auto,
-                .provider_options = .{},
-                .trace_ctx = .{},
-                .content_capture_limit = null,
-                .delivery = &delivery,
-                .attempt_evidence = &attempt_evidence,
-                .events = .{ .context = &callback_ctx, .emit_fn = Callbacks.event },
-                .cancel_flag = &cancel_flag,
-                .provider_attempt_owner = .agent,
+    var delivery = DeliveryCertainty.init();
+    var attempt_evidence: AttemptEvidence = .{};
+    var result = try streamModelCompletion(
+        provider,
+        alloc,
+        .{
+            .credential = .{
+                .secret = "subscription-token",
+                .source = .chatgpt_subscription,
+                .account_id = "acct_test",
             },
-            null,
-            alloc,
-        );
-        defer result.deinit(alloc);
-        try std.testing.expect(std.meta.activeTag(result) == .completed);
-    }
+            .session_id = "session-test",
+            .model = "gpt-test",
+            .retry_count = 1,
+            .messages = &.{},
+            .tool_choice = .auto,
+            .provider_options = .{},
+            .trace_ctx = .{},
+            .content_capture_limit = null,
+            .delivery = &delivery,
+            .attempt_evidence = &attempt_evidence,
+            .events = .{ .context = &callback_ctx, .emit_fn = Callbacks.event },
+            .cancel_flag = &cancel_flag,
+            .provider_attempt_owner = .agent,
+        },
+        &usage,
+        alloc,
+    );
+    defer result.deinit(alloc);
+    try std.testing.expect(std.meta.activeTag(result) == .completed);
 
-    try std.testing.expectEqual(@as(usize, 65), local_provider.calls);
+    try std.testing.expectEqual(@as(usize, 1), local_provider.calls);
     var snapshot = try usage.snapshot(alloc);
     defer snapshot.deinit(alloc);
     try std.testing.expectEqual(session_usage.Availability.complete, snapshot.billing);
     try std.testing.expect(snapshot.api_duration_complete);
-    try std.testing.expectEqual(@as(u64, 1), snapshot.next_sequence);
-    try std.testing.expectEqual(@as(u64, 0), snapshot.settled_through_sequence);
+    try std.testing.expectEqual(@as(u64, 2), snapshot.next_sequence);
+    try std.testing.expectEqual(@as(u64, 1), snapshot.settled_through_sequence);
+    try std.testing.expectEqual(@as(u64, 3), snapshot.input_tokens);
+    try std.testing.expectEqual(@as(u64, 1), snapshot.output_tokens);
+    try std.testing.expectEqual(@as(?u64, 1), snapshot.request_count);
+    try std.testing.expectEqual(@as(usize, 1), snapshot.models.len);
+    try std.testing.expectEqualStrings("codex/gpt-test", snapshot.models[0].model);
     try std.testing.expectEqual(@as(usize, 0), snapshot.pending.len);
+    try std.testing.expectEqual(@as(usize, 0), snapshot.publication_backlog.len);
 }

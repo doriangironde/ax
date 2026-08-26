@@ -3142,7 +3142,7 @@ fn processQueuedPromptLoop(
                 deps.agent_stream_provider,
                 arena,
                 model_request,
-                if (config.provider_capabilities.deferred_usage) deps.usage else null,
+                deps.usage,
                 deps.usage_allocator,
             ) catch |err| {
                 parent_turn_delivery.observeGatewayDelivery(
