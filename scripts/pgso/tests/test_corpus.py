@@ -578,7 +578,7 @@ class PgsoCorpusTests(unittest.TestCase):
         self.assertEqual(0, result.skipped)
         self.assertEqual(0, result.failed)
         self.assertEqual(2, result.merged_raw_profiles)
-        self.assertFalse((self.root / "zig-out" / "bin" / "fx").exists())
+        self.assertFalse((self.root / "zig-out" / "bin" / "ax").exists())
         self.assertTrue(merged.is_file())
         self.assertEqual(2, len(calls))
         self.assertNotIn("PGSO_INHERITED", calls[0]["env"])
@@ -737,7 +737,7 @@ class PgsoCorpusTests(unittest.TestCase):
 
     def test_behavior_corpus_restores_the_previous_canonical_binary(self) -> None:
         corpus = self.make_corpus(self.make_scenario("first"))
-        canonical = self.root / "zig-out" / "bin" / "fx"
+        canonical = self.root / "zig-out" / "bin" / "ax"
         canonical.parent.mkdir(parents=True)
         canonical.write_bytes(b"stale")
         stale_inode = canonical.stat().st_ino
@@ -765,7 +765,7 @@ class PgsoCorpusTests(unittest.TestCase):
 
     def test_interruption_cleans_tmux_and_restores_the_canonical_binary(self) -> None:
         corpus = self.make_corpus(self.make_scenario("first", requires_tmux=True))
-        canonical = self.root / "zig-out" / "bin" / "fx"
+        canonical = self.root / "zig-out" / "bin" / "ax"
         canonical.parent.mkdir(parents=True)
         canonical.write_bytes(b"original")
         binary = self.root / "candidate-fx"
@@ -814,7 +814,7 @@ class PgsoCorpusTests(unittest.TestCase):
             command_runner=command_runner,
         )
 
-        canonical = self.root / "zig-out" / "bin" / "fx"
+        canonical = self.root / "zig-out" / "bin" / "ax"
         self.assertEqual(2, result.passed)
         self.assertEqual(0, result.failed)
         self.assertEqual(0, result.merged_raw_profiles)
