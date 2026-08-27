@@ -640,6 +640,34 @@ streamlined sign-in UI, prompt-submit latency, e2e hardening). What it took:
   `clientInfo` sites with the ESCAPED pattern
   (`grep -n 'clientInfo' src/core/mcp/*.zig | grep 'ax'`) — a plain
   `grep '"name":"ax"'` misses `\"name\":\"ax\"`.
+- **Round-2 CI battle log (2026-08-26, commit `e3256a5` green):** Full CI +
+  ci.yml + Benchmarks + Binary Size are green on `sync-upstream`; the macOS
+  arm64 PGSO candidate training lane still flakes with 21 s tmux pane
+  timeouts under the fork's concurrent-load conditions (the same scenarios
+  pass in the Full CI matrix), re-run it alone before a release. Fixes that
+  landed along the way and their traps:
+  - MCP `clientInfo` wire sites: the escaped-quote form `\"name\":\"ax\"`
+    defeats both the `"fx"` protect rule AND plain greps — check with
+    `grep clientInfo src/core/mcp/*.zig | grep ax`.
+  - The `"fx"` protect rule shields every quoted `fx` token: `zig-out/bin/fx`
+    (13 sites in mcp-stdio), the `fx` upgrade-fixture symlink and tarball
+    member (fork extracts member `ax`), `fx-trace-*` trace filename filters
+    (fork writes `ax-trace-*`), the `fx-render-bug` replay fixture names.
+  - The upgrade e2e's tarball must pack the product member: the fixture now
+    tars `ax` and the resumed PATH symlink is named `ax`.
+  - The G4 label decision was REVERSED for good: `skillMenuFilterLabel(.fx)`
+    returns upstream's lowercase `fx` again (the fork's capital `Fx` was
+    tuned to the deleted alternate-screen picker; on the merged inline
+    picker it produces a bogus single-result skills panel). Unit and TUI
+    assertions were reverted to the upstream shapes; the fork's
+    `ax · Global` scope labels stay. The fork's `tui-slash-menu` count
+    expectations follow upstream's.
+  - tmux harness: sessions keyed by non-default `base-index`/`pane-base-index`
+    still resolve explicit indexes (the fork's G3 fix), but default-index
+    servers use upstream's `name:0.0` targets without queries; stale
+    `$TMUX_TMPDIR/tmux-<pid>` socket dirs are swept by connect-probing
+    (pid checks are fooled by recycled pids); graceful-exit e2e sessions
+    are isolated (`-L` sockets).
 - **Upstream signing machinery is fork-removed (2026-08-26):** upstream's
   sign-and-notarize steps hardcode Vercel's Apple identity and need secrets
   the fork does not have; they were removed from `release.yml` (see the
