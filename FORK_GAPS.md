@@ -9,19 +9,36 @@ of this fork's history. Read it top to bottom before touching code.
   tag `v0.0.6` (merge `00e3f4f` over `04e0ae0`, v0.0.5), renamed to **ax**.
 - `origin` = `https://github.com/doriangironde/ax.git`, `upstream` =
   `https://github.com/vercel-labs/fx.git`.
+- **Release state (2026-08-27):** the fork's first release **v0.0.7** is
+  tagged and published (GitHub Release with `ax-<platform>-<arch>.tar.gz`
+  assets + sha256 files). `install.sh` in the repo root installs the latest
+  release with sha256 verification; the README one-liner is
+  `curl -fsSL https://raw.githubusercontent.com/doriangironde/ax/main/install.sh | sh`.
+  `main` is at `cffed94`. The two landmark PRs are merged: #1 (release prep)
+  and #2 (upstream sync + `ax provider refresh`).
+- Release caveats (documented, do not reopen casually):
+  - The macOS arm64 build ships as a plain ReleaseSafe binary; the PGSO
+    qualification has never completed on the fork (candidate profile
+    supplement reports "no compatible nonzero functions"). `release.yml`
+    no longer calls `pgso-macos-arm64.yml`; the pipeline stays checked in
+    for a follow-up.
+  - The release job no longer mirrors to the upstream CDN (403 — no Vercel
+    R2 credentials); GitHub Releases is the download source.
 - Fork commits:
   - `0da89d9` — rebrand: user-facing identity + binary rename `fx` → `ax`.
-  - `cbc8db6` — skills-menu filter-label collision fix + TUI/e2e expectation
-    alignment.
+  - `cbc8db6` — skills-menu filter-label fix at the time (the label is
+    upstream's lowercase `fx` again since the round-2 merge; see G7).
   - `528321f` — G10 custom-provider feature (registry, presets, and the
     OpenAI-compatible transport; see G10 below).
   - `00e3f4f` — merge upstream `v0.0.6` with the fork identity, G10, and the
     picker hub re-applied (see "v0.0.6 sync notes" below).
   - `982143c` — merge latest upstream `main` (85 commits past `00e3f4f`) with
-    the fork identity re-applied (see "Round 2 sync notes" in G7). On local
-    branch `sync-upstream`; **not pushed or merged to `main` yet** — the fork's
-    GitHub `main` now carries only the pre-sync history plus the 0.0.7 release
-    prep (PR #1, branch `prepare-v0.0.7`).
+    the fork identity re-applied (see "Round 2 sync notes" in G7); merged to
+    `main` via PR #2.
+  - `2736ed4` — `ax provider refresh <name>` live `/models` catalog refresh.
+  - `cffed94` — installer, `ax-*` release assets, README copy sweep, and the
+    release-flow fixes (PGSO binary path, plain arm64 build, CDN step
+    removal).
 - The binary is `./zig-out/bin/ax`. **Always use this binary for
   verification.** Never run a `PATH`-installed `fx`.
 
@@ -167,11 +184,14 @@ Remaining known items:
    paths in `pgso-macos-arm64.yml`, `scripts/pgso/README.md` prose) are
    deliberate pipeline self-naming — the control path now exists thanks to
    the `build_control` shim; leave the names.
-2. The `Release` workflow runs the full PGSO qualification on every push
-   because the fork has no release tags (`check-version` reports needed).
-   That is heavy and slow; either accept it or tag 0.0.5 once a release is
-   wanted. `Dev Release` and `Publish libfx` lanes legitimately no-op/exit
-   nonzero until a release tag exists.
+2. The `Release` workflow no longer runs PGSO on every push: the fork has a
+   release tag (v0.0.7), so `check-version` short-circuits until the next
+   version bump, and the macos-arm64 build job is a plain ReleaseSafe build
+   (see section 0 release caveats). `Dev Release` and `Publish libfx` lanes
+   no-op until a release tag that matches the current version exists (the
+   first was cut manually through the release workflow after the PR merge;
+   future releases repeat: bump version + changelog markers -> PR -> merge ->
+   the workflow tags and publishes).
 3. Keep the PGSO/binary-size/bench gates: they enforce upstream's 7.8 MiB
    ceiling and 2 ms startup budget; both apply to ax.
 
@@ -726,7 +746,7 @@ Manual smoke of the built binary (AGENTS.md requires driving the change
 before declaring done):
 
 ```bash
-./zig-out/bin/ax --version      # 0.0.5
+./zig-out/bin/ax --version      # 0.0.7 on main
 ./zig-out/bin/ax help           # 𝒂x banner, usage: ax ...
 ./zig-out/bin/ax badcmd         # "ax: unknown subcommand"
 ./zig-out/bin/ax ask "..."      # needs credentials
