@@ -1,6 +1,8 @@
 # fx
 
-## ax fork (unreleased)
+## 0.0.7
+
+<!-- release:start -->
 
 ### New Features
 
@@ -25,9 +27,9 @@
 - **Custom provider key entry:** Typing an API key in the `/login` picker saves it to `providers.json` and completes the switch; the name no longer gets corrupted during stage teardown (the "No custom provider named" garbage-name error).
 - **MCP wire identity:** The binary's `clientInfo` name reverted to `fx` at all emission sites so the conformance fixture oracle, ACP sessions, and the modern MCP subscription flow agree; recovery continuation and prompt context markers keep their `fx` keys.
 
-## 0.0.6
+<!-- release:end -->
 
-<!-- release:start -->
+## 0.0.6
 
 **New Gateway sessions use Kimi K3 with Fast mode, foreground commands require timeouts, auto mode reviews exact pending actions, and the macOS arm64 binary is 0.3% smaller (6.12 MiB vs 6.13 MiB).**
 
