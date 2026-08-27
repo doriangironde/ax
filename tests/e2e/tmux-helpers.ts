@@ -9,6 +9,7 @@
 import { execFileSync, execSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import net from "node:net";
 import { join } from "node:path";
 import { FX_BIN, REPO_ROOT } from "../evals/eval-helpers";
 
@@ -114,7 +115,7 @@ function resolvePaneId(tmuxPrefix: string[], name: string): string {
  * when a newer server's dir exists. Only default-socket servers are affected;
  * isolated sessions use uniquely named `-L` sockets.
  */
-function sweepStaleSocketDirs(tmuxPrefix: string[]): void {
+async function sweepStaleSocketDirs(tmuxPrefix: string[]): Promise<void> {
   if (tmuxPrefix.length > 0) return;
   const tmpDir = process.env.TMUX_TMPDIR ?? tmpdir();
   try {
@@ -122,21 +123,33 @@ function sweepStaleSocketDirs(tmuxPrefix: string[]): void {
       if (!entry.startsWith("tmux-")) continue;
       const dir = join(tmpDir, entry);
       try {
-        // A live server owns a "default" socket file in its dir; an exited
-        // server unlinks it, so a dir without the socket is stale even when
-        // its pid number has been recycled by another process.
-        if (existsSync(join(dir, "default"))) continue;
-        const pid = Number.parseInt(entry.slice("tmux-".length), 10);
-        if (Number.isInteger(pid) && pid > 0) {
-          try {
-            process.kill(pid, 0);
-            continue;
-          } catch {}
-        }
-        rmSync(dir, { recursive: true, force: true });
+        const socket = join(dir, "default");
+        // A live server accepts connections on its socket. A dir whose
+        // socket is missing (clean exit unlinks it) or refuses connections
+        // (crash with a leftover socket, or a recycled pid) is stale and
+        // makes tmux error "no server running" instead of starting fresh.
+        const alive = existsSync(socket) && (await socketIsAlive(socket));
+        if (!alive) rmSync(dir, { recursive: true, force: true });
       } catch {}
     }
   } catch {}
+}
+
+/** True when a unix socket accepts a connection (a live tmux server). */
+function socketIsAlive(path: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const sock = net.connect(path);
+    sock.setTimeout(1_000);
+    sock.once("connect", () => {
+      sock.destroy();
+      resolve(true);
+    });
+    sock.once("timeout", () => {
+      sock.destroy();
+      resolve(false);
+    });
+    sock.once("error", () => resolve(false));
+  });
 }
 
 /**
@@ -643,7 +656,7 @@ export class TmuxSession {
       ? `tmux wait-for ${shellQuote(startGate)} && exec ${observedCmd}`
       : observedCmd;
     const tmuxPrefix = resolvedSocketName ? ["-L", resolvedSocketName] : [];
-    sweepStaleSocketDirs(tmuxPrefix);
+    await sweepStaleSocketDirs(tmuxPrefix);
     const setupSessionName = `${name}-setup`;
     const killSetupSession = () => {
       try {
