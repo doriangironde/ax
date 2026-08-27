@@ -72,6 +72,8 @@ class Handler(BaseHTTPRequestHandler):
             request = json.loads(raw)
         except Exception:
             request = {}
+        with open("/tmp/mock-openai.log", "a") as log:
+            log.write("BODY %s\n\n" % json.dumps(request)[:8000])
         model = request.get("model", "helper")
         messages_text = json.dumps(request.get("messages", []), ensure_ascii=False).lower()
         last_user = ""

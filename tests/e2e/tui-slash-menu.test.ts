@@ -2350,7 +2350,7 @@ expect(pane).toContain("𝒂x");
       expect(alternateCount("\x1b[?1049h")).toBe(entersBeforeSkills);
       expect(alternateCount("\x1b[?1049l")).toBe(leavesBeforeSkills);
       expect(pane).toContain("[All]");
-      expect(pane).toContain("Fx");
+      expect(pane).toContain("fx");
       expect(pane).toContain("Workspace");
       expect(pane).toContain("Claude");
       expect(pane).toContain("Codex");
