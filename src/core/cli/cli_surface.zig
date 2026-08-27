@@ -20,6 +20,7 @@ const debug_trace = @import("../shared/debug_trace.zig");
 const doctor_runtime = @import("doctor_runtime.zig");
 const gateway_provider = @import("../gateway/gateway_provider.zig");
 const model_catalog = @import("../gateway/model_catalog.zig");
+const openai_compatible = @import("../../gateway/openai_compatible.zig");
 const provider_set = @import("../gateway/provider_set.zig");
 const background_process_provider = @import(
     "../execution/background_process_provider.zig",
@@ -1002,6 +1003,98 @@ fn activateCustomProviderSelection(
     return true;
 }
 
+/// Fetches the live `/models` catalog for a registered custom provider and
+/// merges it into providers.json: models the endpoint drops are removed unless
+/// they are the provider's selected model, and models that already exist keep
+/// their declared metadata.
+fn refreshCustomProviderModels(
+    alloc: Allocator,
+    deps: RunDeps,
+    name: []const u8,
+) !bool {
+    if (!custom_providers.validName(name)) {
+        try writeProviderActivationError(alloc, deps, .provider_command, "invalid custom provider name");
+        return false;
+    }
+    const home = deps.getenv(deps.env_ctx, "HOME") orelse {
+        try writeProviderActivationError(alloc, deps, .provider_command, "HOME is not set");
+        return false;
+    };
+    var registry = custom_providers.load(alloc, home) catch |err| {
+        debug_trace.logf("config", "custom provider registry load failed err={s}", .{@errorName(err)});
+        try writeProviderActivationError(alloc, deps, .provider_command, "could not read providers.json");
+        return false;
+    };
+    defer registry.deinit(alloc);
+    const entry = registry.find(name) orelse {
+        const detail = try std.fmt.allocPrint(
+            alloc,
+            "no custom provider named '{s}' in providers.json",
+            .{name},
+        );
+        defer alloc.free(detail);
+        try writeProviderActivationError(alloc, deps, .provider_command, detail);
+        return false;
+    };
+    if (!entry.keyless and entry.apiKeyBytes() == null) {
+        const detail = try std.fmt.allocPrint(
+            alloc,
+            "'{s}' has no usable API key; export its key environment variable or set the key inline before refreshing",
+            .{name},
+        );
+        defer alloc.free(detail);
+        try writeProviderActivationError(alloc, deps, .provider_command, detail);
+        return false;
+    }
+    const workspace_root = try io_mod.realpathAlloc(alloc, ".");
+    defer alloc.free(workspace_root);
+    var settings = config_runtime.loadMergedSettings(alloc, workspace_root) catch |err| {
+        debug_trace.logf("config", "provider refresh settings load failed err={s}", .{@errorName(err)});
+        try writeProviderActivationError(alloc, deps, .provider_command, "could not load settings");
+        return false;
+    };
+    defer settings.deinit(alloc);
+    const selected_model = settings.models.get(.custom);
+
+    var cancel_flag = std.atomic.Value(bool).init(false);
+    const fetched = openai_compatible.fetchModelCatalog(alloc, entry, &cancel_flag) catch |err| {
+        const detail = try std.fmt.allocPrint(
+            alloc,
+            "could not fetch the model catalog for '{s}': {s}",
+            .{ name, @errorName(err) },
+        );
+        defer alloc.free(detail);
+        try writeProviderActivationError(alloc, deps, .provider_command, detail);
+        return false;
+    };
+    defer {
+        for (fetched) |*model| model.deinit(alloc);
+        alloc.free(fetched);
+    }
+
+    const summary = custom_providers.refreshModels(alloc, home, name, selected_model, fetched) catch |err| {
+        const detail = try std.fmt.allocPrint(
+            alloc,
+            "could not merge the refreshed catalog into providers.json: {s}",
+            .{@errorName(err)},
+        );
+        defer alloc.free(detail);
+        try writeProviderActivationError(alloc, deps, .provider_command, detail);
+        return false;
+    };
+    const summary_text = try std.fmt.allocPrint(
+        alloc,
+        "{s} models refreshed: {d} added, {d} kept, {d} removed (no longer advertised), {d} retained (selected), {d} total.\n",
+        .{ name, summary.added, summary.kept, summary.removed, summary.retained, summary.models },
+    );
+    defer alloc.free(summary_text);
+    try writeStdout(deps, summary_text);
+    if (summary.truncated) {
+        try writeStdout(deps, "The catalog exceeded the per-provider model limit; the oldest entries beyond the limit were dropped.\n");
+    }
+    return true;
+}
+
 const CustomCliCatalogContext = struct {
     registry: custom_providers.Registry = .{},
     provider_name: []u8 = &.{},
@@ -1313,8 +1406,18 @@ fn runNonInteractiveWithDeps(
             return .handled_success;
         },
         .provider => |rest| {
+            if (rest.len > 0 and std.mem.eql(u8, rest[0], "refresh")) {
+                if (rest.len != 2) {
+                    try writeStderr(deps, "usage: ax provider refresh <custom-name>\n");
+                    return .handled_failure;
+                }
+                return if (try refreshCustomProviderModels(alloc, deps, rest[1]))
+                    .handled_success
+                else
+                    .handled_failure;
+            }
             if (rest.len > 1) {
-                try writeStderr(deps, "usage: ax provider <gateway|codex|grok|custom-name>\n");
+                try writeStderr(deps, "usage: ax provider <gateway|codex|grok|custom-name> | refresh <custom-name>\n");
                 return .handled_failure;
             }
             if (rest.len == 0) {

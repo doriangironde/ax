@@ -110,6 +110,8 @@ When a selected custom provider has no usable key, ax asks for one inline: the p
 
 This unlocks flat-rate subscriptions such as OpenCode Go, plus local and self-hosted servers (Ollama, vLLM, LM Studio) and aggregators (OpenRouter) that speak OpenAI Chat Completions.
 
+Registered custom providers list their models from `providers.json`. To sync the list with the endpoint, run `ax provider refresh <name>`: ax fetches the provider's `/models` catalog, adds newly advertised models, keeps existing models (with their declared metadata), and removes models the endpoint no longer advertises — except the provider's currently selected model, which is kept so open sessions stay selectable. The saved selection always survives a refresh.
+
 The status line hides the workspace path and Git branch by default. Enable the `Status line workspace` option in `/settings`, run `/statusline workspace`, or set it in `~/.fx/settings.json`:
 
 ```json

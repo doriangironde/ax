@@ -99,8 +99,8 @@ export interface EvalOptions {
   setup?: (dir: string) => Promise<void>;
 }
 
-const PREFIX = "fx-eval-";
-const HOME_PREFIX = "fx-eval-home-";
+const PREFIX = "ax-eval-";
+const HOME_PREFIX = "ax-eval-home-";
 const TEST_HOME_PREFIX = "fx-test-home-";
 
 export function createWorkDir(): string {
@@ -223,7 +223,7 @@ export async function runEval(
       json = JSON.parse(result.stdout.trim());
     } catch {
       throw new Error(
-        `Failed to parse fx JSON output.\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
+        `Failed to parse ax JSON output.\nstdout: ${result.stdout}\nstderr: ${result.stderr}`,
       );
     }
 
@@ -245,7 +245,7 @@ export async function runEval(
 
     if (json.error) {
       throw new Error(
-        `fx returned error: ${json.error}\nstderr: ${result.stderr.slice(-1000)}`,
+        `ax returned error: ${json.error}\nstderr: ${result.stderr.slice(-1000)}`,
       );
     }
 
@@ -426,7 +426,7 @@ export function assertFirstTerminalExecMatches(
   expect(pattern.test(first?.command_result?.command ?? "")).toBe(true);
 }
 
-// Generic fx CLI runner for deterministic command coverage.
+// Generic ax CLI runner for deterministic command coverage.
 
 export interface FxRunResult {
   stdout: string;

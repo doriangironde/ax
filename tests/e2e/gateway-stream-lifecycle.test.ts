@@ -655,31 +655,31 @@ describe("gateway stream lifecycle", () => {
     }]);
     expect(findUnavailableCapabilityReferences(installSkillCurrent)).toEqual([]);
 
-    const mcpSearchOld = fixture("neutral", [{
+    const capabilitySearchOld = fixture("neutral", [{
       type: "function",
-      name: "mcp_search_tools",
+      name: "capability_search",
       description: "When NOT to use: memory, skill, or ask-user work.",
       inputSchema: { type: "object", properties: {} },
     }]);
-    expect(findUnavailableCapabilityReferences(mcpSearchOld)).toEqual([
+    expect(findUnavailableCapabilityReferences(capabilitySearchOld)).toEqual([
       {
         capability: "skill",
-        source: "tool:mcp_search_tools",
+        source: "tool:capability_search",
         clause: "memory, skill, or ask-user work",
       },
       {
         capability: "memory",
-        source: "tool:mcp_search_tools",
+        source: "tool:capability_search",
         clause: "memory, skill, or ask-user work",
       },
     ]);
-    const mcpSearchCurrent = fixture("neutral", [{
+    const capabilitySearchCurrent = fixture("neutral", [{
       type: "function",
-      name: "mcp_search_tools",
+      name: "capability_search",
       description: "When NOT to use: the needed capability is already advertised directly.",
       inputSchema: { type: "object", properties: {} },
     }]);
-    expect(findUnavailableCapabilityReferences(mcpSearchCurrent)).toEqual([]);
+    expect(findUnavailableCapabilityReferences(capabilitySearchCurrent)).toEqual([]);
 
     const excludedText = [
       "Use terminal and web_search.",
@@ -734,7 +734,7 @@ describe("gateway stream lifecycle", () => {
       expect(request.tools).toHaveLength(25);
       expect(findUnavailableCapabilityReferences(oracleRequest)).toEqual([]);
       expect(customProviderGuidanceState(oracleRequest)).toEqual({
-        providerToolIndices: [22],
+          providerToolIndices: [22],
         guidanceMessageIndices: [1],
       });
       expect(request.prompt[0]?.role).toBe("system");
@@ -1705,6 +1705,7 @@ describe("gateway stream lifecycle", () => {
     );
 
     const ambiguousCallId = "exact_skill_ambiguous";
+    const searchCallId = "exact_skill_search";
     const exactBCallId = "exact_skill_b";
     let advertisedA = "";
     let advertisedB = "";
@@ -1718,14 +1719,29 @@ describe("gateway stream lifecycle", () => {
             throw new Error(`Expected two advertised ${skillName} locations, got ${JSON.stringify(locations)}`);
           }
           [advertisedA, advertisedB] = locations;
+          return fakeGatewayToolCall(searchCallId, "capability_search", {
+            query: "managed exact duplicate workflow",
+          });
+        }
+        case 1: {
+          const searchOutput = JSON.parse(
+            toolResultOutput(gateway.requests[1]!.body, searchCallId),
+          ) as {
+            skills: Array<{ name: string; description: string; location: string }>;
+            count: number;
+            more_available: boolean;
+          };
+          if (searchOutput.skills[0]?.location !== advertisedB) {
+            throw new Error(`Expected managed skill first, got ${JSON.stringify(searchOutput)}`);
+          }
           return fakeGatewayToolCall(ambiguousCallId, "skill", { name: skillName });
         }
-        case 1:
+        case 2:
           return fakeGatewayToolCall(exactBCallId, "skill", {
             name: skillName,
             location: advertisedB,
           });
-        case 2:
+        case 3:
           return fakeGatewayFinalText("Exact duplicate selection complete.");
         default:
           return new Response("unexpected request", { status: 500 });
@@ -1752,20 +1768,27 @@ describe("gateway stream lifecycle", () => {
       expect(firstJson.exit_code).toBe(0);
       expect(firstJson.error).toBeUndefined();
       expect(firstJson.tool_calls).toEqual([
+        { name: "capability_search", status: "success" },
         { name: "skill", status: "error" },
         { name: "skill", status: "success" },
       ]);
       expect(advertisedA).toBe(skillDirectoryA);
       expect(advertisedB).toBe(skillDirectoryB);
-      expect(gateway.requestCount()).toBe(3);
+      expect(gateway.requestCount()).toBe(4);
 
       const initialRequest = gatewayRequest(gateway.requests[0]!.body);
       const skillSchema = initialRequest.tools.find((tool) => tool.name === "skill");
+      const capabilitySearchSchema = initialRequest.tools.find((tool) =>
+        tool.name === "capability_search"
+      );
       expect(skillSchema).toBeDefined();
       expect(skillSchema?.inputSchema.type).toBe("object");
       expect(skillSchema?.inputSchema.properties.name.type).toBe("string");
       expect(skillSchema?.inputSchema.properties.location.type).toBe("string");
       expect(skillSchema?.inputSchema.required).toEqual(["name"]);
+      expect(capabilitySearchSchema).toBeDefined();
+      expect(capabilitySearchSchema?.inputSchema.required).toEqual(["query"]);
+      expect((capabilitySearchSchema?.inputSchema.properties.query as { maxLength?: number }).maxLength).toBe(4096);
 
       const available = taggedBlock(gateway.requests[0]!.body, "available_skills");
       expect(promptText(gateway.requests[0]!.body)).toContain(
@@ -1780,13 +1803,29 @@ describe("gateway stream lifecycle", () => {
       expect(available).not.toContain(bodyA);
       expect(available).not.toContain(bodyB);
 
-      const ambiguity = toolResultOutput(gateway.requests[1]!.body, ambiguousCallId);
+      const searchOutputText = toolResultOutput(gateway.requests[1]!.body, searchCallId);
+      const searchOutput = JSON.parse(searchOutputText) as {
+        skills: Array<{ name: string; description: string; location: string }>;
+        counts: { skills: number; mcp_tools: number };
+        more_available: { skills: boolean; mcp_tools: boolean };
+      };
+      expect(searchOutput.counts.skills).toBe(2);
+      expect(searchOutput.more_available.skills).toBe(false);
+      expect(searchOutput.skills.map((entry) => entry.location)).toEqual([
+        advertisedB,
+        advertisedA,
+      ]);
+      expect(searchOutputText).not.toContain(bodyA);
+      expect(searchOutputText).not.toContain(bodyB);
+      expect(searchOutputText).not.toContain(malformedBody);
+
+      const ambiguity = toolResultOutput(gateway.requests[2]!.body, ambiguousCallId);
       expect(ambiguity).toContain(advertisedA);
       expect(ambiguity).toContain(advertisedB);
       expect(ambiguity).not.toContain(bodyA);
       expect(ambiguity).not.toContain(bodyB);
 
-      const loadedB = toolResultOutput(gateway.requests[2]!.body, exactBCallId);
+      const loadedB = toolResultOutput(gateway.requests[3]!.body, exactBCallId);
       expect(loadedB).toContain(bodyB);
       expect(loadedB).not.toContain(companionB);
       expect(loadedB).not.toContain(bodyA);
@@ -1800,6 +1839,127 @@ describe("gateway stream lifecycle", () => {
       const firstTrace = readFileSync(tracePath, "utf8");
       expect(firstTrace).toContain(malformedDirectory);
       expect(firstTrace).toContain("cause=duplicate_recognized_key");
+    } finally {
+      gateway.stop();
+      rmSync(root.root, { recursive: true, force: true });
+    }
+  }, 45_000);
+
+  test("capability search ranks natural skill intent and keeps durable model-visible JSON exact after redaction", async () => {
+    const root = createFixtureRoot("skill-search-projection");
+    const tracePath = join(root.root, "trace.log");
+    const unsafeDirectory = join(
+      root.workspace,
+      ".agents",
+      "skills",
+      "TOKEN=runtime-location-secret",
+    );
+    const safeDirectory = join(root.home, ".fx", "skills", "mail-helper");
+    const safeBody = "SAFE_SKILL_SEARCH_BODY_SENTINEL";
+    mkdirSync(unsafeDirectory, { recursive: true });
+    mkdirSync(safeDirectory, { recursive: true });
+    for (const name of [
+      "humanizer",
+      "animate",
+      "animation-accessibility",
+      "animation-performance",
+      "animation-vocabulary",
+      "css-animations",
+      "find-animation-opportunities",
+      "hyperframes-animation",
+    ]) {
+      const directory = join(root.workspace, ".agents", "skills", name);
+      mkdirSync(directory, { recursive: true });
+      writeFileSync(
+        join(directory, "SKILL.md"),
+        `---\nname: ${name}\ndescription: Animation workflow for visual motion\n---\n\nDISTRACTOR_BODY_MUST_NOT_LOAD\n`,
+      );
+    }
+    writeFileSync(
+      join(unsafeDirectory, "SKILL.md"),
+      "---\nname: unsafe-workflow\ndescription: Review unsafe workflow\n---\n\nUNSAFE_BODY_MUST_NOT_LOAD\n",
+    );
+    writeFileSync(
+      join(safeDirectory, "SKILL.md"),
+      `---\nname: mail-helper\ndescription: Send email messages. API_KEY=runtime-description-secret\n---\n\n${safeBody}\n`,
+    );
+
+    const searchCallId = "projected_capability_search";
+    const loadCallId = "projected_skill_load";
+    let projectedSearch: {
+      skills: Array<{ name: string; description: string; location: string }>;
+      counts: { skills: number; mcp_tools: number };
+      more_available: { skills: boolean; mcp_tools: boolean };
+    } | undefined;
+    let responseIndex = 0;
+    let gateway: GatewayFixture;
+    gateway = startGateway(() => {
+      switch (responseIndex++) {
+        case 0:
+          return fakeGatewayToolCall(searchCallId, "capability_search", {
+            query: "send an email",
+          });
+        case 1: {
+          projectedSearch = JSON.parse(
+            toolResultOutput(gateway.requests[1]!.body, searchCallId),
+          );
+          const selected = projectedSearch!.skills[0];
+          if (!selected) throw new Error("Expected one projected skill result");
+          return fakeGatewayToolCall(loadCallId, "skill", {
+            name: selected.name,
+            location: selected.location,
+          });
+        }
+        case 2:
+          return fakeGatewayFinalText("Projected skill search complete.");
+        default:
+          return new Response("unexpected request", { status: 500 });
+      }
+    });
+
+    try {
+      const result = await runFx(
+        ["ask", "--json", "--auto", "Exercise projected skill discovery."],
+        {
+          cwd: root.workspace,
+          env: {
+            ...fixtureEnv(root, gateway, tracePath),
+            FX_DISABLE_KEYCHAIN: "1",
+            FX_AUTO_UPGRADE: "0",
+          },
+          timeoutMs: 30_000,
+        },
+      );
+      const json = parseAskJson(result.stdout);
+
+      expect(result.code).toBe(0);
+      expect(json.exit_code).toBe(0);
+      expect(json.error).toBeUndefined();
+      expect(json.tool_calls).toEqual([
+        { name: "capability_search", status: "success" },
+        { name: "skill", status: "success" },
+      ]);
+      expect(projectedSearch?.skills[0]).toEqual({
+        name: "mail-helper",
+        description: "Send email messages. API_KEY=[redacted]",
+        location: safeDirectory,
+      });
+      expect(projectedSearch?.counts.skills).toBe(8);
+      expect(projectedSearch?.counts.mcp_tools).toBe(0);
+      expect(projectedSearch?.more_available.skills).toBe(true);
+      expect(projectedSearch?.skills.some((skill) => skill.name === "unsafe-workflow"))
+        .toBe(false);
+      const projectedText = toolResultOutput(gateway.requests[1]!.body, searchCallId);
+      expect(projectedText).not.toContain("unsafe-workflow");
+      expect(projectedText).not.toContain("TOKEN=runtime-location-secret");
+      expect(projectedText).not.toContain("UNSAFE_BODY_MUST_NOT_LOAD");
+      expect(projectedText).not.toContain("DISTRACTOR_BODY_MUST_NOT_LOAD");
+      expect(projectedText).not.toContain(safeBody);
+
+      const loaded = toolResultOutput(gateway.requests[2]!.body, loadCallId);
+      expect(loaded).toContain(safeBody);
+      expect(loaded).not.toContain("UNSAFE_BODY_MUST_NOT_LOAD");
+      expect(loaded).not.toContain("DISTRACTOR_BODY_MUST_NOT_LOAD");
     } finally {
       gateway.stop();
       rmSync(root.root, { recursive: true, force: true });
@@ -4137,12 +4297,11 @@ describe("gateway stream lifecycle", () => {
     const broadSearchCallId = "mcp_search_broad_1";
     const selectCallId = "mcp_select_lazy_1";
     const responses = [
-      fakeGatewayToolCall(searchCallId, "mcp_search_tools", {
-        query: "fixture echo",
+      fakeGatewayToolCall(searchCallId, "capability_search", {
+        query: "fixture input public",
       }),
-      fakeGatewayToolCall(broadSearchCallId, "mcp_search_tools", {
+      fakeGatewayToolCall(broadSearchCallId, "capability_search", {
         query: "fixture",
-        limit: 20,
       }),
       fakeGatewayToolCall(selectCallId, "mcp_select_tool", {
         name: DYNAMIC_MCP_TOOL_NAME,
@@ -4188,7 +4347,7 @@ describe("gateway stream lifecycle", () => {
       expect(existsSync(mcp.readyPath)).toBe(true);
 
       const searchOutput = toolResultOutput(gateway.requests[1]!.body, searchCallId);
-      const searchTools = JSON.stringify(JSON.parse(searchOutput).tools);
+      const searchTools = JSON.stringify(JSON.parse(searchOutput).mcp_tools);
       expect(searchOutput).toContain(DYNAMIC_MCP_TOOL_NAME);
       expect(searchTools).not.toContain("inputSchema");
       expect(searchTools).not.toContain("SECRET_SERVER_INSTRUCTION_SENTINEL");
@@ -4197,8 +4356,8 @@ describe("gateway stream lifecycle", () => {
       const broadSearchOutput = JSON.parse(
         toolResultOutput(gateway.requests[2]!.body, broadSearchCallId),
       );
-      expect(broadSearchOutput.count).toBe(20);
-      expect(broadSearchOutput.more_available).toBe(true);
+      expect(broadSearchOutput.counts.mcp_tools).toBe(8);
+      expect(broadSearchOutput.more_available.mcp_tools).toBe(true);
 
       const selectedRequest = gatewayRequest(gateway.requests[3]!.body);
       const selectedTool = selectedRequest.tools.find((tool) =>

@@ -149,7 +149,7 @@ fn batchContainsInterruptedClosure(
 fn batchSegmentEndsInterrupted(events: []const WorkerEvent) bool {
     for (events, 0..) |event, index| {
         if (index > 0) switch (event) {
-            .begin_prompt, .begin_prompt_with_skill_bindings => return false,
+            .begin_prompt, .begin_prompt_with_skill_bindings, .begin_presented_prompt => return false,
             else => {},
         };
         const lifecycle = switch (event) {
@@ -210,6 +210,7 @@ pub fn Runtime(comptime App: type) type {
                 },
                 .begin_prompt,
                 .begin_prompt_with_skill_bindings,
+                .begin_presented_prompt,
                 .append_user_feedback,
                 .notification,
                 .question_requested,
@@ -579,9 +580,17 @@ pub fn Runtime(comptime App: type) type {
                 }
             }
             if (!app.stream.active and !app.pacer.hasCompletedAssistantPresentationTail()) return false;
+            const native_history_active = if (comptime @hasDecl(
+                @TypeOf(app.shell),
+                "nativeHistoryActive",
+            ))
+                app.shell.nativeHistoryActive()
+            else
+                false;
             if (app.approval_prompt.isActive() or
                 app.question_prompt.isActive() or
-                !app.shell.shimmer_active)
+                !app.shell.shimmer_active or
+                native_history_active)
             {
                 return false;
             }
@@ -643,7 +652,7 @@ pub fn Runtime(comptime App: type) type {
 
             events: while (batch.claim()) |event| {
                 if (!first_event) switch (event) {
-                    .begin_prompt, .begin_prompt_with_skill_bindings => {
+                    .begin_prompt, .begin_prompt_with_skill_bindings, .begin_presented_prompt => {
                         interrupted_segment = cancel_requested or
                             batchSegmentEndsInterrupted(batch.claimedAndRemaining());
                     },
@@ -692,7 +701,6 @@ pub fn Runtime(comptime App: type) type {
                         app.stream.active = true;
                         app.stream.turn_started_ms = io_mod.milliTimestamp();
                         app.shell.render_requests.request(.footer);
-                        defer app.shell.render_requests.finishSubmittedPromptTransition();
                         try handlers.write_user_prompt(handlers.ctx, prompt);
                     },
                     .begin_prompt_with_skill_bindings => |begin| {
@@ -705,11 +713,26 @@ pub fn Runtime(comptime App: type) type {
                         app.stream.active = true;
                         app.stream.turn_started_ms = io_mod.milliTimestamp();
                         app.shell.render_requests.request(.footer);
-                        defer app.shell.render_requests.finishSubmittedPromptTransition();
                         if (handlers.write_user_prompt_with_skill_bindings) |write_bound_prompt| {
                             try write_bound_prompt(handlers.ctx, begin.prompt, begin.skill_bindings, begin.skill_display_spans);
                         } else {
                             try handlers.write_user_prompt(handlers.ctx, begin.prompt);
+                        }
+                    },
+                    .begin_presented_prompt => |turn_id| {
+                        if (!try requireAssistantTextDrain(handlers)) {
+                            try retainClaimedEventAndSuffix(app, &batch, "assistant_text_drain_blocked");
+                            drain_owns_current = false;
+                            break :events;
+                        }
+                        resetStream(app, true);
+                        app.stream.active = true;
+                        app.stream.turn_started_ms = io_mod.milliTimestamp();
+                        app.shell.render_requests.request(.footer);
+                        if (comptime @hasDecl(App, "acceptPresentedPrompt")) {
+                            try App.acceptPresentedPrompt(app, turn_id);
+                        } else {
+                            return error.PresentedPromptUnsupported;
                         }
                     },
                     .append_user_feedback => |text| {
@@ -871,7 +894,6 @@ pub fn Runtime(comptime App: type) type {
                         }
                         resetStream(app, false);
                         app.shell.render_requests.request(.footer);
-                        defer app.shell.render_requests.finishSubmittedPromptTransition();
                         try handlers.error_text(handlers.ctx, notice);
                     },
                 }
@@ -1342,6 +1364,7 @@ const FakeCommandOutputDisplay = struct {
 const FakeShell = struct {
     command_output_display: FakeCommandOutputDisplay = .{},
     shimmer_active: bool = false,
+    native_history_active: bool = false,
     render_requests: render_request.RenderRequestState = .{},
     lifecycle: transcript_runtime.TranscriptRuntime = .{
         .layout = .{
@@ -1364,6 +1387,10 @@ const FakeShell = struct {
         self.lifecycle.deinit(alloc);
         for (self.raw_entries.items) |entry| alloc.free(entry);
         self.raw_entries.deinit(alloc);
+    }
+
+    fn nativeHistoryActive(self: *const FakeShell) bool {
+        return self.native_history_active;
     }
 
     fn trimTrailingBlankLines(self: *FakeShell) void {
@@ -2118,6 +2145,27 @@ test "core.app_worker_runtime advances visible animation exactly at its deadline
     try std.testing.expectEqual(before, app.shell.render_requests.visibleAnimationPhase());
 }
 
+test "core.app_worker_runtime pauses visible animation after native history starts" {
+    var app = FakeApp.init(std.testing.allocator);
+    defer app.deinit();
+
+    app.stream = .{
+        .active = true,
+        .last_activity_kind = .ask,
+    };
+    app.shell.shimmer_active = true;
+    app.shell.native_history_active = true;
+    app.shell.render_requests.animation_visible = true;
+    app.shell.render_requests.animation_next_deadline_ms = 1;
+
+    try std.testing.expect(!Runtime(FakeApp).advanceVisibleAnimation(
+        &app,
+        NoopBridge.lifecyclePresenter(&app),
+        1,
+    ));
+    try std.testing.expect(!app.shell.render_requests.hasReason(.animation));
+}
+
 test "core.app_worker_runtime expires selected child worker status while idle" {
     var app = FakeApp.init(std.testing.allocator);
     defer app.deinit();
@@ -2184,11 +2232,9 @@ test "core.app_worker_runtime resets turn token counters on begin and finish" {
         .active = true,
         .token_progress = .{ .input_tokens = 10, .output_tokens = 20 },
     };
-    app.shell.render_requests.beginSubmittedPromptTransition();
     try app.worker.pushEvent(std.heap.c_allocator, .{ .begin_prompt = try types.dupeUserTurn(std.heap.c_allocator, .{ .text = @constCast("next"), .images = &.{} }) });
     try tickNoop(&app);
     try std.testing.expectEqual(types.TurnTokenProgress{}, app.stream.token_progress);
-    try std.testing.expect(!app.shell.render_requests.submittedPromptTransitionPending());
     try std.testing.expect(!app.shell.render_requests.blocksFrameCommit());
 
     app.stream = .{
@@ -3778,7 +3824,6 @@ test "core.app_worker_runtime error text resets active stream and requests foote
         .assistant_text_started = true,
         .last_activity_kind = .ask,
     };
-    app.shell.render_requests.beginSubmittedPromptTransition();
     try app.worker.pushEvent(std.heap.c_allocator, .{ .error_text = .{
         .topic = "system",
         .tone = .@"error",
@@ -3791,7 +3836,6 @@ test "core.app_worker_runtime error text resets active stream and requests foote
     try std.testing.expect(capture.error_saw_drain);
     try std.testing.expect(capture.saw_reset_stream);
     try std.testing.expect(capture.saw_footer_request);
-    try std.testing.expect(!app.shell.render_requests.submittedPromptTransitionPending());
     try std.testing.expect(!app.shell.render_requests.blocksFrameCommit());
 }
 

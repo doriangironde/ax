@@ -46,7 +46,7 @@ export interface ExpectedFirstTool {
 }
 
 export interface CoveredEntrypoint {
-  entrypoint: "interactive" | "fx ask" | "ACP" | "subagent";
+  entrypoint: "interactive" | "ax ask" | "ACP" | "subagent";
   contextContract: typeof SHARED_MODEL_CONTEXT_CONTRACT;
   notes: string;
 }
@@ -116,7 +116,7 @@ const DESTRUCTIVE_OR_MUTATING_TOOLS = [
 
 function askEntrypoint(notes: string): CoveredEntrypoint {
   return {
-    entrypoint: "fx ask",
+    entrypoint: "ax ask",
     contextContract: SHARED_MODEL_CONTEXT_CONTRACT,
     notes,
   };
@@ -176,7 +176,7 @@ export const AGENT_QUALITY_BASELINE_MATRIX: readonly AgentQualityMatrixRow[] = [
   },
   {
     id: "git-history-local",
-    userPrompt: "Look for changes/last commits in fx.",
+    userPrompt: "Look for changes/last commits in ax.",
     failureCategory: "local search",
     expectedFirstTool: {
       category: "local git command",
@@ -300,7 +300,7 @@ export const AGENT_QUALITY_BASELINE_MATRIX: readonly AgentQualityMatrixRow[] = [
     targetResult:
       "Stops after confirming the command-policy wiring and any defined-but-uncalled helper, then exits 0 with known facts, uncertainty, and the next useful step.",
     coveredEntrypoints: [
-      askEntrypoint("Applies to long --auto --json local source investigations in fx ask."),
+      askEntrypoint("Applies to long --auto --json local source investigations in ax ask."),
       interactiveEntrypoint("Interactive runs should show the same milestone-only progress and stop condition."),
     ],
   },

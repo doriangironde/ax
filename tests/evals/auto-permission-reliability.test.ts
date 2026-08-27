@@ -96,7 +96,7 @@ afterEach(() => {
 
 function createRoot(): Root {
   const root = realpathSync(
-    mkdtempSync(join(tmpdir(), "fx-auto-permission-eval-")),
+    mkdtempSync(join(tmpdir(), "ax-auto-permission-eval-")),
   );
   const home = join(root, "home");
   const workspace = join(root, "workspace");

@@ -66,7 +66,7 @@ function seedV0ChangelogRepo(dir: string): void {
 
 function seedFxHistoryRepo(dir: string): void {
   seedGitRepo(dir, "https://github.com/vercel-labs/fx.git");
-  writeFileSync(join(dir, "README.md"), "# fx\n");
+  writeFileSync(join(dir, "README.md"), "# ax\n");
   execSync("git add . && git commit -m initial", { cwd: dir, stdio: "pipe" });
 }
 
@@ -113,7 +113,7 @@ describe("eval: GitHub and repo routing", () => {
       seedFxHistoryRepo(workDir);
 
       const result = await runEval(
-        "look for changes/last commits in the fx",
+        "look for changes/last commits in the ax",
         {
           cwd: workDir,
           timeoutSec: 180,
