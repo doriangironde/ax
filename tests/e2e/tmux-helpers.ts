@@ -160,23 +160,32 @@ function socketIsAlive(path: string): Promise<boolean> {
  * the explicit resolution, which queries a just-created server and can race.
  */
 function serverUsesDefaultIndices(tmuxPrefix: string[]): boolean {
-  try {
-    const base = execFileSync(
-      "tmux",
-      [...tmuxPrefix, "show-options", "-gv", "base-index"],
-      { stdio: "pipe", encoding: "utf-8" },
-    ).trim();
-    const pane = execFileSync(
-      "tmux",
-      [...tmuxPrefix, "show-options", "-gv", "pane-base-index"],
-      { stdio: "pipe", encoding: "utf-8" },
-    ).trim();
-    return base === "0" && pane === "0";
-  } catch {
-    // The server could not answer options queries yet; fall back to the
-    // explicit resolution path, which retries briefly.
-    return false;
+  // A freshly started server may not answer an options query on the first
+  // attempt; retry briefly before falling back to the resolution path.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const base = execFileSync(
+        "tmux",
+        [...tmuxPrefix, "show-options", "-gv", "base-index"],
+        { stdio: "pipe", encoding: "utf-8" },
+      ).trim();
+      const pane = execFileSync(
+        "tmux",
+        [...tmuxPrefix, "show-options", "-gv", "pane-base-index"],
+        { stdio: "pipe", encoding: "utf-8" },
+      ).trim();
+      return base === "0" && pane === "0";
+    } catch {
+      if (attempt + 1 < 3) {
+        try {
+          execFileSync("sleep", ["0.25"], { stdio: "pipe" });
+        } catch {}
+      }
+    }
   }
+  // The server could not answer options queries; fall back to the
+  // explicit resolution path, which retries briefly.
+  return false;
 }
 
 /**

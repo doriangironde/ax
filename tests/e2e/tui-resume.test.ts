@@ -4325,7 +4325,7 @@ test.skipIf(!tmuxAvailable())(
     mkdirSync(home);
     mkdirSync(workspace);
     mkdirSync(binDir);
-    symlinkSync(FX_BIN, join(binDir, "fx"));
+    symlinkSync(FX_BIN, join(binDir, "ax"));
     writeFileSync(stderrPath, "");
     writeFileSync(resumedStderrPath, "");
     const initialGateway = startFakeGateway([fakeGatewayFinalText(marker)]);
