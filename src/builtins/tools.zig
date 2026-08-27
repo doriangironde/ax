@@ -13,6 +13,7 @@ const tool_set_contract = @import("../core/tooling/tool_set.zig");
 const tool_specs = @import("../core/tooling/tool_specs.zig");
 const tracked_file_mutations = @import("../core/tooling/tracked_file_mutations.zig");
 const types = @import("../core/shared/types.zig");
+const lexical_relevance = @import("../core/shared/lexical_relevance.zig");
 const permission_gate = @import("../core/permissions/permission_gate.zig");
 const ask_user_question_impl = @import("../tools/agent/ask_user_question.zig");
 const subagent_impl = @import("../tools/agent/subagent.zig");
@@ -35,6 +36,8 @@ const read_tool_result_impl = @import("../tools/session/read_tool_result.zig");
 const terminal_impl = @import("../tools/terminal/terminal.zig");
 const install_skill_impl = @import("../tools/skills/install_skill.zig");
 const skill_impl = @import("../tools/skills/skill.zig");
+const skill_search_impl = @import("../tools/skills/skill_search.zig");
+const capability_search_impl = @import("../tools/capabilities/capability_search.zig");
 const web_fetch_impl = @import("../tools/web/fetch.zig");
 const web_search_impl = @import("../tools/web/search.zig");
 const test_io_mod = if (std_builtin.is_test)
@@ -107,7 +110,7 @@ const terminal_shell_schema = model_tool_schema.ObjectSchema{
 const terminal_return_schema = model_tool_schema.ObjectSchema{
     .properties = &.{
         .{ .name = "kind", .json_type = .string, .shape = &.{ .enum_values = &.{ "started", "exit", "quiet", "match" } }, .description = "started is for start readiness; exit waits for session exit; quiet requires duration_ms; match requires pattern. output_contains is a monitor condition, not a return kind." },
-        .{ .name = "duration_ms", .json_type = .integer, .minimum = 1, .description = "Required for quiet." },
+        .{ .name = "duration_ms", .json_type = .integer, .bounds = &.{ .minimum = 1 }, .description = "Required for quiet." },
         .{ .name = "pattern", .json_type = .string, .description = "Required for match." },
     },
     .required = &.{"kind"},
@@ -116,8 +119,8 @@ const terminal_return_schema = model_tool_schema.ObjectSchema{
 
 const terminal_dimensions_schema = model_tool_schema.ObjectSchema{
     .properties = &.{
-        .{ .name = "rows", .json_type = .integer, .minimum = 1, .maximum = 4096 },
-        .{ .name = "columns", .json_type = .integer, .minimum = 1, .maximum = 4096 },
+        .{ .name = "rows", .json_type = .integer, .bounds = &.{ .minimum = 1, .maximum = 4096 } },
+        .{ .name = "columns", .json_type = .integer, .bounds = &.{ .minimum = 1, .maximum = 4096 } },
     },
     .required = &.{ "rows", "columns" },
     .additional_properties = false,
@@ -127,11 +130,11 @@ const terminal_monitor_condition_schema = model_tool_schema.ObjectSchema{
     .properties = &.{
         .{ .name = "kind", .json_type = .string, .shape = &.{ .enum_values = &.{ "process_exit", "exit_code", "signal", "output_contains", "output_matches", "output_quiet", "screen_matches", "tcp_ready", "http_ready", "path_exists", "path_changed", "path_size", "custom_probe" } } },
         .{ .name = "pattern", .json_type = .string, .description = "Output/screen pattern or HTTP URL, according to kind." },
-        .{ .name = "duration_ms", .json_type = .integer, .minimum = @intCast(terminal_monitor.minimum_schedule_ms), .maximum = @intCast(terminal_monitor.maximum_schedule_ms), .description = "Required for output_quiet." },
+        .{ .name = "duration_ms", .json_type = .integer, .bounds = &.{ .minimum = @intCast(terminal_monitor.minimum_schedule_ms), .maximum = @intCast(terminal_monitor.maximum_schedule_ms) }, .description = "Required for output_quiet." },
         .{ .name = "exit_code", .json_type = .integer },
         .{ .name = "signal", .json_type = .string, .shape = &.{ .enum_values = &.{ "hangup", "interrupt", "quit", "terminate", "kill" } } },
         .{ .name = "host", .json_type = .string },
-        .{ .name = "port", .json_type = .integer, .minimum = 1, .maximum = 65535 },
+        .{ .name = "port", .json_type = .integer, .bounds = &.{ .minimum = 1, .maximum = 65535 } },
         .{ .name = "path", .json_type = .string, .description = "Required for path conditions. The path must resolve within the terminal workspace; external paths are rejected." },
         .{ .name = "minimum_bytes", .json_type = .integer },
         .{ .name = "command", .json_type = .string },
@@ -144,8 +147,8 @@ const terminal_monitor_condition_schema = model_tool_schema.ObjectSchema{
 const terminal_monitor_notify_schema = model_tool_schema.ObjectSchema{
     .properties = &.{
         .{ .name = "kind", .json_type = .string, .shape = &.{ .enum_values = &.{ "on_match", "on_state_change", "on_exit", "every_check", "every_n_checks", "interval" } } },
-        .{ .name = "count", .json_type = .integer, .minimum = 1 },
-        .{ .name = "interval_ms", .json_type = .integer, .minimum = @intCast(terminal_monitor.minimum_schedule_ms), .maximum = @intCast(terminal_monitor.maximum_schedule_ms) },
+        .{ .name = "count", .json_type = .integer, .bounds = &.{ .minimum = 1 } },
+        .{ .name = "interval_ms", .json_type = .integer, .bounds = &.{ .minimum = @intCast(terminal_monitor.minimum_schedule_ms), .maximum = @intCast(terminal_monitor.maximum_schedule_ms) } },
     },
     .required = &.{"kind"},
     .additional_properties = false,
@@ -154,7 +157,7 @@ const terminal_monitor_notify_schema = model_tool_schema.ObjectSchema{
 const terminal_monitor_lifetime_schema = model_tool_schema.ObjectSchema{
     .properties = &.{
         .{ .name = "kind", .json_type = .string, .shape = &.{ .enum_values = &.{ "until_match", "until_session_end", "duration" } } },
-        .{ .name = "duration_ms", .json_type = .integer, .minimum = 1, .maximum = @intCast(terminal_monitor.maximum_lifetime_ms) },
+        .{ .name = "duration_ms", .json_type = .integer, .bounds = &.{ .minimum = 1, .maximum = @intCast(terminal_monitor.maximum_lifetime_ms) } },
     },
     .required = &.{"kind"},
     .additional_properties = false,
@@ -163,7 +166,7 @@ const terminal_monitor_lifetime_schema = model_tool_schema.ObjectSchema{
 const terminal_monitor_definition_schema = model_tool_schema.ObjectSchema{
     .properties = &.{
         .{ .name = "condition", .json_type = .object, .shape = &.{ .object = &terminal_monitor_condition_schema } },
-        .{ .name = "check_interval_ms", .json_type = .integer, .minimum = @intCast(terminal_monitor.minimum_schedule_ms), .maximum = @intCast(terminal_monitor.maximum_schedule_ms), .description = "Required for polling conditions tcp_ready, http_ready, path_exists, path_changed, path_size, and custom_probe. Event-driven conditions process_exit, exit_code, signal, output_contains, output_matches, output_quiet, and screen_matches omit it; materialized values are ignored." },
+        .{ .name = "check_interval_ms", .json_type = .integer, .bounds = &.{ .minimum = @intCast(terminal_monitor.minimum_schedule_ms), .maximum = @intCast(terminal_monitor.maximum_schedule_ms) }, .description = "Required for polling conditions tcp_ready, http_ready, path_exists, path_changed, path_size, and custom_probe. Event-driven conditions process_exit, exit_code, signal, output_contains, output_matches, output_quiet, and screen_matches omit it; materialized values are ignored." },
         .{ .name = "notify", .json_type = .object, .shape = &.{ .object = &terminal_monitor_notify_schema } },
         .{ .name = "lifetime", .json_type = .object, .shape = &.{ .object = &terminal_monitor_lifetime_schema } },
     },
@@ -195,27 +198,27 @@ const terminal_write_schema = model_tool_schema.ObjectSchema{
 const terminal_properties = [_]model_tool_schema.Property{
     .{ .name = "session_id", .json_type = .string, .description = "Required for session-targeted actions. Set null for start and list; owner-catalog authority is private." },
     .{ .name = "cwd", .json_type = .string, .description = "Working directory for exec or start; defaults to the workspace." },
-    .{ .name = "command", .json_type = .string, .max_length = terminal_contracts.max_command_bytes, .description = "Command for exec, or optional command for start; omit on start for an interactive shell." },
+    .{ .name = "command", .json_type = .string, .bounds = &.{ .max_length = terminal_contracts.max_command_bytes }, .description = "Command for exec, or optional command for start; omit on start for an interactive shell." },
     .{ .name = "profile", .json_type = .string, .shape = &.{ .enum_values = &.{ "clean", "user" } }, .description = "Startup profile for exec or start; omission defaults to user, while clean skips user startup files. User-profile execution supports the configured Bash or zsh login shell. Bash login execution reads login startup files; .bashrc is available only when sourced by the login profile. For start, an explicit shell is used instead of the default profile and is mutually exclusive with profile." },
-    .{ .name = "timeout_ms", .json_type = .integer, .minimum = terminal_impl.exec_timeout_min_ms, .maximum = terminal_impl.exec_timeout_max_ms, .description = "Required for exec. Maximum foreground runtime in milliseconds; use start for persistent work." },
+    .{ .name = "timeout_ms", .json_type = .integer, .bounds = &.{ .minimum = terminal_impl.exec_timeout_min_ms, .maximum = terminal_impl.exec_timeout_max_ms }, .description = "Required for exec. Maximum foreground runtime in milliseconds; use start for persistent work." },
     .{ .name = "shell", .json_type = .object, .shape = &.{ .object = &terminal_shell_schema } },
     .{ .name = "backend", .json_type = .string, .shape = &.{ .enum_values = &.{ "native", "tmux" } }, .description = "Start backend or optional list filter." },
     .{ .name = "return_when", .json_type = .object, .shape = &.{ .object = &terminal_return_schema }, .description = "Only for start or wait; required for every wait. After a signal intended to stop the session, use kind exit. For output matching, use kind match with pattern; output_contains is monitor-only." },
-    .{ .name = "wait_ceiling_ms", .json_type = .integer, .minimum = 1, .description = "Required for wait; required for start when return_when is non-immediate; maximum blocking time in milliseconds." },
+    .{ .name = "wait_ceiling_ms", .json_type = .integer, .bounds = &.{ .minimum = 1 }, .description = "Required for wait; required for start when return_when is non-immediate; maximum blocking time in milliseconds." },
     .{ .name = "dimensions", .json_type = .object, .shape = &.{ .object = &terminal_dimensions_schema } },
-    .{ .name = "initial_monitors", .json_type = .array, .max_items = 32, .shape = &.{ .array_objects = &terminal_monitor_definition_schema } },
-    .{ .name = "cursor_segment", .json_type = .integer, .minimum = 1, .description = "Only for read and required for every read. For a new session's first read, use segment 1 with cursor_offset 0; otherwise use unread_range.start or raw_gap.available_from from the latest session facts. Continue from the previous raw_range.end." },
+    .{ .name = "initial_monitors", .json_type = .array, .bounds = &.{ .max_items = 32 }, .shape = &.{ .array_objects = &terminal_monitor_definition_schema } },
+    .{ .name = "cursor_segment", .json_type = .integer, .bounds = &.{ .minimum = 1 }, .description = "Only for read and required for every read. For a new session's first read, use segment 1 with cursor_offset 0; otherwise use unread_range.start or raw_gap.available_from from the latest session facts. Continue from the previous raw_range.end." },
     .{ .name = "cursor_offset", .json_type = .integer, .description = "Only for read. Use 0 with segment 1 for a new session's first read, then continue from the previous raw_range.end offset." },
     .{ .name = "after_event_id", .json_type = .integer },
-    .{ .name = "acknowledge_event_id", .json_type = .integer, .minimum = 1 },
-    .{ .name = "max_events", .json_type = .integer, .minimum = 1, .maximum = 256 },
+    .{ .name = "acknowledge_event_id", .json_type = .integer, .bounds = &.{ .minimum = 1 } },
+    .{ .name = "max_events", .json_type = .integer, .bounds = &.{ .minimum = 1, .maximum = 256 } },
     .{ .name = "write", .json_type = .object, .shape = &.{ .object = &terminal_write_schema }, .description = "Payload is valid only with lease=use. Set null for acquire, release, and revoke." },
     .{ .name = "lease", .json_type = .string, .shape = &.{ .enum_values = &.{ "acquire", "use", "release", "revoke" } }, .description = "Use lease=acquire without write, then send a second call with lease=use and the payload. Release and revoke also require write=null." },
     .{ .name = "monitor", .json_type = .object, .shape = &.{ .object = &terminal_monitor_operation_schema } },
     .{ .name = "task_id", .json_type = .string },
     .{ .name = "workspace_root", .json_type = .string },
-    .{ .name = "rows", .json_type = .integer, .minimum = 1, .maximum = 4096 },
-    .{ .name = "columns", .json_type = .integer, .minimum = 1, .maximum = 4096 },
+    .{ .name = "rows", .json_type = .integer, .bounds = &.{ .minimum = 1, .maximum = 4096 } },
+    .{ .name = "columns", .json_type = .integer, .bounds = &.{ .minimum = 1, .maximum = 4096 } },
     .{ .name = "signal", .json_type = .string, .shape = &.{ .enum_values = &.{ "hangup", "interrupt", "quit", "terminate", "kill" } } },
     .{ .name = "close_policy", .json_type = .string, .shape = &.{ .enum_values = &.{ "graceful", "force" } }, .description = "Only for close and required for close. Close is final; read or inspect all needed output before closing." },
 };
@@ -229,8 +232,9 @@ fn terminalNullableDescription(comptime description: []const u8) []const u8 {
 
 fn terminalNullableProperty(comptime property: model_tool_schema.Property) model_tool_schema.Property {
     var result = property;
-    result.nullable = true;
-    result.nullable_description = terminalNullableDescription(property.description);
+    result.nullable = &.{
+        .description = terminalNullableDescription(property.description),
+    };
     return result;
 }
 
@@ -355,6 +359,10 @@ const terminal_exec_only_gateway_required = blk: {
 };
 const skill_description =
     "Read an installed skill or one of its relative text resources in bounded chunks. Pass the exact advertised location when one is listed, then use next_offset to continue. When to use: the user explicitly invokes a listed skill or the task clearly matches one. When NOT to use: generic exploration, ordinary file edits, guessing from vague words, or installing a missing skill.";
+const skill_search_description =
+    "Search bounded metadata for installed skills by natural-language use case without loading skill instructions. When to use: a task may match an installed skill but its exact name is unknown. When NOT to use: an exact skill is already known, ordinary local inspection is sufficient, or the user asks to install a missing skill. After discovery, call skill with the returned exact name and location.";
+const capability_search_description =
+    "Search installed skill metadata and configured MCP tool metadata together from one natural-language task. When to use: the task may need a specialized capability but its exact skill or MCP tool name is unknown. When NOT to use: the exact capability is already advertised, or ordinary local inspection, execution, web, or user interaction is sufficient. After discovery, call skill with an exact returned name and location, or mcp_select_tool with an exact returned MCP tool name.";
 const install_skill_description =
     "Install a reusable skill from a supported source into ax managed skill storage. When to use: the user asks to install a skill or pastes a skills install command. When NOT to use: no installation is required, install packages, fetch unrelated repos, or modify project code.";
 const mcp_search_tools_description =
@@ -375,7 +383,7 @@ const ask_user_question_option_schema = model_tool_schema.ObjectSchema{
 const ask_user_question_question_schema = model_tool_schema.ObjectSchema{
     .properties = &.{
         .{ .name = "question", .json_type = .string, .description = "Specific blocking decision shown to the user; do not ask for facts tools can inspect." },
-        .{ .name = "options", .json_type = .array, .min_items = 2, .max_items = 6, .shape = &.{ .array_objects = &ask_user_question_option_schema } },
+        .{ .name = "options", .json_type = .array, .bounds = &.{ .min_items = 2, .max_items = 6 }, .shape = &.{ .array_objects = &ask_user_question_option_schema } },
     },
     .required = &.{ "question", "options" },
 };
@@ -395,21 +403,21 @@ const subagent_terminal_schema = model_tool_schema.ObjectSchema{
 const subagent_notifications_schema = model_tool_schema.ObjectSchema{
     .properties = &.{
         .{ .name = "terminal", .json_type = .object, .shape = &.{ .object = &subagent_terminal_schema } },
-        .{ .name = "milestones", .json_type = .array, .max_items = subagent_domain.max_milestones, .shape = &.{ .array_values = .{ .json_type = .string } } },
-        .{ .name = "report_interval_ms", .json_type = .integer, .minimum = 1 },
-        .{ .name = "report_duration_ms", .json_type = .integer, .minimum = 1 },
-        .{ .name = "stop_conditions", .json_type = .array, .max_items = subagent_domain.max_stop_conditions, .shape = &.{ .array_values = .{ .json_type = .string, .enum_values = &.{ "terminal", "duration_elapsed" } } } },
+        .{ .name = "milestones", .json_type = .array, .bounds = &.{ .max_items = subagent_domain.max_milestones }, .shape = &.{ .array_values = .{ .json_type = .string } } },
+        .{ .name = "report_interval_ms", .json_type = .integer, .bounds = &.{ .minimum = 1 } },
+        .{ .name = "report_duration_ms", .json_type = .integer, .bounds = &.{ .minimum = 1 } },
+        .{ .name = "stop_conditions", .json_type = .array, .bounds = &.{ .max_items = subagent_domain.max_stop_conditions }, .shape = &.{ .array_values = .{ .json_type = .string, .enum_values = &.{ "terminal", "duration_elapsed" } } } },
     },
     .additional_properties = false,
 };
 
 const subagent_create_schema = model_tool_schema.ObjectSchema{
     .properties = &.{
-        .{ .name = "name", .json_type = .string, .min_length = 1, .max_length = subagent_domain.max_name_bytes },
+        .{ .name = "name", .json_type = .string, .bounds = &.{ .min_length = 1, .max_length = subagent_domain.max_name_bytes } },
         .{ .name = "mode", .json_type = .string, .shape = &.{ .enum_values = &.{ "one_off", "persistent" } } },
-        .{ .name = "prompt", .json_type = .string, .min_length = 1, .max_length = subagent_domain.max_prompt_bytes },
-        .{ .name = "model", .json_type = .string, .min_length = 1, .max_length = subagent_domain.max_model_bytes },
-        .{ .name = "effort", .json_type = .string, .min_length = 1, .max_length = types.ReasoningEffort.max_name_bytes },
+        .{ .name = "prompt", .json_type = .string, .bounds = &.{ .min_length = 1, .max_length = subagent_domain.max_prompt_bytes } },
+        .{ .name = "model", .json_type = .string, .bounds = &.{ .min_length = 1, .max_length = subagent_domain.max_model_bytes } },
+        .{ .name = "effort", .json_type = .string, .bounds = &.{ .min_length = 1, .max_length = types.ReasoningEffort.max_name_bytes } },
         .{ .name = "permission_mode", .json_type = .string, .shape = &.{ .enum_values = &.{ "ask", "auto", "yolo" } }, .description = "Child permission mode. Inherits the caller when omitted and cannot exceed it." },
         .{ .name = "notifications", .json_type = .object, .shape = &.{ .object = &subagent_notifications_schema } },
     },
@@ -420,8 +428,8 @@ const subagent_create_schema = model_tool_schema.ObjectSchema{
 const subagent_inspect_wait_schema = model_tool_schema.ObjectSchema{
     .properties = &.{
         .{ .name = "until", .json_type = .string, .shape = &.{ .enum_values = &.{"settled"} }, .description = "Wait until a persistent child is idle or the child reaches another non-running terminal/recovery state." },
-        .{ .name = "after_generation", .json_type = .integer, .minimum = 0, .description = "Optional durable generation that must be exceeded before the wait can complete." },
-        .{ .name = "timeout_ms", .json_type = .integer, .minimum = 1, .maximum = subagent_domain.max_inspect_wait_ms, .description = "Bounded wait deadline in milliseconds. A timeout returns the latest inspection with status wait_timed_out." },
+        .{ .name = "after_generation", .json_type = .integer, .bounds = &.{ .minimum = 0 }, .description = "Optional durable generation that must be exceeded before the wait can complete." },
+        .{ .name = "timeout_ms", .json_type = .integer, .bounds = &.{ .minimum = 1, .maximum = subagent_domain.max_inspect_wait_ms }, .description = "Bounded wait deadline in milliseconds. A timeout returns the latest inspection with status wait_timed_out." },
     },
     .required = &.{ "until", "timeout_ms" },
     .additional_properties = false,
@@ -429,10 +437,10 @@ const subagent_inspect_wait_schema = model_tool_schema.ObjectSchema{
 
 const subagent_inspect_schema = model_tool_schema.ObjectSchema{
     .properties = &.{
-        .{ .name = "id", .json_type = .string, .min_length = 1 },
-        .{ .name = "sections", .json_type = .array, .min_items = 1, .max_items = 6, .shape = &.{ .array_values = .{ .json_type = .string, .enum_values = &.{ "status", "messages", "tool_activity", "events", "configuration", "relationship" } } } },
-        .{ .name = "cursor", .json_type = .string, .min_length = 1 },
-        .{ .name = "limit", .json_type = .integer, .minimum = 1, .maximum = subagent_domain.max_page_limit },
+        .{ .name = "id", .json_type = .string, .bounds = &.{ .min_length = 1 } },
+        .{ .name = "sections", .json_type = .array, .bounds = &.{ .min_items = 1, .max_items = 6 }, .shape = &.{ .array_values = .{ .json_type = .string, .enum_values = &.{ "status", "messages", "tool_activity", "events", "configuration", "relationship" } } } },
+        .{ .name = "cursor", .json_type = .string, .bounds = &.{ .min_length = 1 } },
+        .{ .name = "limit", .json_type = .integer, .bounds = &.{ .minimum = 1, .maximum = subagent_domain.max_page_limit } },
         .{ .name = "wait", .json_type = .object, .shape = &.{ .object = &subagent_inspect_wait_schema }, .description = "Optional condition-driven same-turn wait. Requires the status section and cannot be combined with a cursor." },
     },
     .required = &.{ "id", "sections" },
@@ -441,15 +449,15 @@ const subagent_inspect_schema = model_tool_schema.ObjectSchema{
 
 const subagent_send_schema = model_tool_schema.ObjectSchema{
     .properties = &.{
-        .{ .name = "id", .json_type = .string, .min_length = 1 },
-        .{ .name = "content", .json_type = .string, .min_length = 1, .max_length = subagent_domain.max_message_bytes },
+        .{ .name = "id", .json_type = .string, .bounds = &.{ .min_length = 1 } },
+        .{ .name = "content", .json_type = .string, .bounds = &.{ .min_length = 1, .max_length = subagent_domain.max_message_bytes } },
     },
     .required = &.{ "id", "content" },
     .additional_properties = false,
 };
 
 const subagent_milestone_schema = model_tool_schema.ObjectSchema{
-    .properties = &.{.{ .name = "name", .json_type = .string, .min_length = 1, .max_length = subagent_domain.max_name_bytes }},
+    .properties = &.{.{ .name = "name", .json_type = .string, .bounds = &.{ .min_length = 1, .max_length = subagent_domain.max_name_bytes } }},
     .required = &.{"name"},
     .additional_properties = false,
 };
@@ -467,8 +475,8 @@ const subagent_message_schema = model_tool_schema.ObjectSchema{
 const subagent_relationship_schema = model_tool_schema.ObjectSchema{
     .properties = &.{
         .{ .name = "action", .json_type = .string, .shape = &.{ .enum_values = &.{ "attach", "detach", "reparent" } } },
-        .{ .name = "id", .json_type = .string, .min_length = 1 },
-        .{ .name = "parent_id", .json_type = .string, .min_length = 1 },
+        .{ .name = "id", .json_type = .string, .bounds = &.{ .min_length = 1 } },
+        .{ .name = "parent_id", .json_type = .string, .bounds = &.{ .min_length = 1 } },
     },
     .required = &.{ "action", "id" },
     .additional_properties = false,
@@ -476,10 +484,10 @@ const subagent_relationship_schema = model_tool_schema.ObjectSchema{
 
 const subagent_configure_schema = model_tool_schema.ObjectSchema{
     .properties = &.{
-        .{ .name = "id", .json_type = .string, .min_length = 1 },
-        .{ .name = "name", .json_type = .string, .min_length = 1, .max_length = subagent_domain.max_name_bytes },
-        .{ .name = "model", .json_type = .string, .min_length = 1, .max_length = subagent_domain.max_model_bytes },
-        .{ .name = "effort", .json_type = .string, .min_length = 1, .max_length = types.ReasoningEffort.max_name_bytes },
+        .{ .name = "id", .json_type = .string, .bounds = &.{ .min_length = 1 } },
+        .{ .name = "name", .json_type = .string, .bounds = &.{ .min_length = 1, .max_length = subagent_domain.max_name_bytes } },
+        .{ .name = "model", .json_type = .string, .bounds = &.{ .min_length = 1, .max_length = subagent_domain.max_model_bytes } },
+        .{ .name = "effort", .json_type = .string, .bounds = &.{ .min_length = 1, .max_length = types.ReasoningEffort.max_name_bytes } },
         .{ .name = "permission_mode", .json_type = .string, .shape = &.{ .enum_values = &.{ "ask", "auto", "yolo" } }, .description = "New child permission mode. Cannot exceed the caller's current mode." },
         .{ .name = "notifications", .json_type = .object, .shape = &.{ .object = &subagent_notifications_schema } },
     },
@@ -489,7 +497,7 @@ const subagent_configure_schema = model_tool_schema.ObjectSchema{
 
 const subagent_lifecycle_schema = model_tool_schema.ObjectSchema{
     .properties = &.{
-        .{ .name = "id", .json_type = .string, .min_length = 1 },
+        .{ .name = "id", .json_type = .string, .bounds = &.{ .min_length = 1 } },
         .{ .name = "action", .json_type = .string, .shape = &.{ .enum_values = &.{ "cancel", "resume", "close", "reopen" } } },
     },
     .required = &.{ "id", "action" },
@@ -983,7 +991,7 @@ pub const web_search = ToolSpec{
         .description = web_search_description,
         .input_schema = .{
             .properties = &.{
-                .{ .name = "query", .json_type = .string, .min_length = 2 },
+                .{ .name = "query", .json_type = .string, .bounds = &.{ .min_length = 2 } },
                 .{ .name = "allowed_domains", .json_type = .array, .shape = &.{ .array_values = .{ .json_type = .string } } },
                 .{ .name = "blocked_domains", .json_type = .array, .shape = &.{ .array_values = .{ .json_type = .string } } },
             },
@@ -1058,6 +1066,65 @@ const terminal_exec_only = blk: {
 pub fn terminalExecOnlySpec() ToolSpec {
     return terminal_exec_only;
 }
+
+pub const skill_search = ToolSpec{
+    .name = "skill_search",
+    .description = skill_search_description,
+    .model_schema = .{
+        .name = "skill_search",
+        .description = skill_search_description,
+        .input_schema = .{
+            .properties = &.{
+                .{ .name = "query", .json_type = .string, .bounds = &.{ .max_length = lexical_relevance.max_query_bytes }, .description = "Natural-language use case over installed skill names and descriptions." },
+            },
+            .required = &.{"query"},
+            .additional_properties = false,
+        },
+    },
+    .model_visible = false,
+    .executor_kind = .skill,
+    .activity_kind = .read,
+    .requires_approval = false,
+    .action_label = "Searching skills",
+    .completed_action_label = "Searched skills",
+    .label_arg_kind = .query,
+    .label_arg_default = "skills",
+    .permission_target_kind = .none,
+    .decode = skill_search_impl.decode,
+    .validate = skill_search_impl.validate,
+    .call = skill_search_impl.call,
+    .reads_only_fn = skill_search_impl.readsOnly,
+    .irreversible_fn = skill_search_impl.isIrreversible,
+};
+
+pub const capability_search = ToolSpec{
+    .name = "capability_search",
+    .description = capability_search_description,
+    .model_schema = .{
+        .name = "capability_search",
+        .description = capability_search_description,
+        .input_schema = .{
+            .properties = &.{
+                .{ .name = "query", .json_type = .string, .bounds = &.{ .max_length = lexical_relevance.max_query_bytes }, .description = "Natural-language task over installed skills and configured MCP tools." },
+            },
+            .required = &.{"query"},
+            .additional_properties = false,
+        },
+    },
+    .executor_kind = .skill,
+    .activity_kind = .read,
+    .requires_approval = false,
+    .action_label = "Searching capabilities",
+    .completed_action_label = "Searched capabilities",
+    .label_arg_kind = .query,
+    .label_arg_default = "capabilities",
+    .permission_target_kind = .none,
+    .decode = capability_search_impl.decode,
+    .validate = capability_search_impl.validate,
+    .call = capability_search_impl.call,
+    .reads_only_fn = capability_search_impl.readsOnly,
+    .irreversible_fn = capability_search_impl.isIrreversible,
+};
 
 pub const skill = ToolSpec{
     .name = "skill",
@@ -1159,12 +1226,13 @@ pub const mcp_search_tools = ToolSpec{
         .description = mcp_search_tools_description,
         .input_schema = .{
             .properties = &.{
-                .{ .name = "query", .json_type = .string, .description = "Keyword query over dynamic tool name, description, server, input schema, and tags." },
+                .{ .name = "query", .json_type = .string, .bounds = &.{ .max_length = lexical_relevance.max_query_bytes }, .description = "Keyword query over dynamic tool name, description, server, input schema, and tags." },
                 .{ .name = "limit", .json_type = .integer, .description = "Optional maximum results to return. Defaults to 8 and is capped." },
             },
             .required = &.{"query"},
         },
     },
+    .model_visible = false,
     .executor_kind = .mcp_search_tools,
     .activity_kind = .read,
     .requires_approval = false,
@@ -1252,7 +1320,7 @@ pub const ask_user_question = ToolSpec{
         .description = ask_user_question_description,
         .input_schema = .{
             .properties = &.{
-                .{ .name = "questions", .json_type = .array, .min_items = 1, .max_items = 4, .shape = &.{ .array_objects = &ask_user_question_question_schema } },
+                .{ .name = "questions", .json_type = .array, .bounds = &.{ .min_items = 1, .max_items = 4 }, .shape = &.{ .array_objects = &ask_user_question_question_schema } },
             },
             .required = &.{"questions"},
         },
@@ -1285,21 +1353,21 @@ pub const vision = ToolSpec{
                     .name = "image_ids",
                     .json_type = .array,
                     .description = "Ordered unique IDs of user-authorized images to inspect.",
-                    .min_items = 1,
+                    .bounds = &.{ .min_items = 1 },
                     .shape = &.{ .array_values = .{ .json_type = .integer } },
                 },
                 .{
                     .name = "paths",
                     .json_type = .array,
                     .description = "Ordered unique local image paths supplied by the user. Relative paths resolve from the workspace; ~/ resolves from the user's home directory.",
-                    .min_items = 1,
+                    .bounds = &.{ .min_items = 1 },
                     .shape = &.{ .array_values = .{ .json_type = .string } },
                 },
                 .{
                     .name = "focus",
                     .json_type = .string,
                     .description = "Specific visual evidence to extract from every requested image.",
-                    .min_length = 1,
+                    .bounds = &.{ .min_length = 1 },
                 },
             },
             .required = &.{"focus"},
@@ -1374,6 +1442,8 @@ pub const all = [_]tool_dispatch.Tool{
     web_fetch,
     web_search,
     terminal,
+    capability_search,
+    skill_search,
     skill,
     install_skill,
     subagent,
@@ -1386,6 +1456,39 @@ pub const all = [_]tool_dispatch.Tool{
 };
 
 pub const registry = tool_dispatch.Registry{ .tools = all[0..] };
+
+test "built-in model-facing tool contract stays byte exact" {
+    const alloc = std.testing.allocator;
+    var hasher = std.crypto.hash.sha2.Sha256.init(.{});
+
+    inline for (all) |tool| {
+        try std.testing.expectEqualStrings(tool.name, tool.model_schema.name);
+        try std.testing.expectEqualStrings(
+            tool.description,
+            tool.model_schema.description,
+        );
+        const schema_json = try tool_specs.toolGatewaySchemaJson(alloc, tool);
+        defer alloc.free(schema_json);
+        hasher.update(schema_json);
+        hasher.update("\x00");
+    }
+    for (advertisement_order) |name| {
+        hasher.update(name);
+        hasher.update("\x00");
+    }
+    const exec_only_json = try tool_specs.toolGatewaySchemaJson(
+        alloc,
+        terminalExecOnlySpec(),
+    );
+    defer alloc.free(exec_only_json);
+    hasher.update(exec_only_json);
+
+    const actual_hex = std.fmt.bytesToHex(hasher.finalResult(), .lower);
+    try std.testing.expectEqualStrings(
+        "9994a29b08b317706b6a574a2fb525284135d932d33046f0272212982b0fdf4e",
+        &actual_hex,
+    );
+}
 
 test "registry classifies every built-in progress label" {
     inline for (all) |tool| {
@@ -1459,7 +1562,7 @@ test "terminal tool schema derives one closed branch per terminal action" {
         for (contract.allowed, branch.properties) |field_name, property| {
             try std.testing.expectEqualStrings(field_name, property.name);
             if (std.mem.eql(u8, field_name, "action")) {
-                try std.testing.expect(!property.nullable);
+                try std.testing.expect(property.nullable == null);
                 try std.testing.expectEqualSlices(
                     []const u8,
                     &.{@tagName(action)},
@@ -1469,7 +1572,7 @@ test "terminal tool schema derives one closed branch per terminal action" {
             }
             try std.testing.expectEqual(
                 !nameInSet(contract.required, field_name),
-                property.nullable,
+                property.nullable != null,
             );
         }
     }
@@ -1482,9 +1585,9 @@ test "terminal tool schema derives one closed branch per terminal action" {
     const close_schema = terminal_action_schema(.close);
     const exec_timeout = schemaProperty(exec_schema, "timeout_ms").?;
     try std.testing.expectEqual(model_tool_schema.JsonType.integer, exec_timeout.json_type);
-    try std.testing.expectEqual(@as(?u64, terminal_impl.exec_timeout_min_ms), exec_timeout.minimum);
-    try std.testing.expectEqual(@as(?u64, terminal_impl.exec_timeout_max_ms), exec_timeout.maximum);
-    try std.testing.expect(!exec_timeout.nullable);
+    try std.testing.expectEqual(@as(?u64, terminal_impl.exec_timeout_min_ms), exec_timeout.bounds.?.minimum);
+    try std.testing.expectEqual(@as(?u64, terminal_impl.exec_timeout_max_ms), exec_timeout.bounds.?.maximum);
+    try std.testing.expect(exec_timeout.nullable == null);
     try std.testing.expectEqualSlices(
         []const u8,
         &.{ "native", "tmux" },
@@ -1512,11 +1615,11 @@ test "terminal tool schema derives one closed branch per terminal action" {
     );
     try std.testing.expectEqualStrings(
         "Only for start or wait; required for every wait. After a signal intended to stop the session, use kind exit. For output matching, use kind match with pattern; output_contains is monitor-only. Set null when the selected action does not use this field.",
-        schemaProperty(start_schema, "return_when").?.nullable_description,
+        schemaProperty(start_schema, "return_when").?.nullable.?.description,
     );
     try std.testing.expectEqualStrings(
         "Only for read. Use 0 with segment 1 for a new session's first read, then continue from the previous raw_range.end offset. Set null when the selected action does not use this field.",
-        schemaProperty(read_schema, "cursor_offset").?.nullable_description,
+        schemaProperty(read_schema, "cursor_offset").?.nullable.?.description,
     );
     try std.testing.expectEqualStrings(
         "Only for close and required for close. Close is final; read or inspect all needed output before closing.",
@@ -1532,14 +1635,14 @@ test "terminal tool schema derives one closed branch per terminal action" {
     const notification_interval = schemaProperty(terminal_monitor_notify_schema, "interval_ms").?;
     const lifetime_duration = schemaProperty(terminal_monitor_lifetime_schema, "duration_ms").?;
     const check_interval = schemaProperty(terminal_monitor_definition_schema, "check_interval_ms").?;
-    try std.testing.expectEqual(@as(?u64, terminal_monitor.minimum_schedule_ms), output_quiet_duration.minimum);
-    try std.testing.expectEqual(@as(?u64, terminal_monitor.maximum_schedule_ms), output_quiet_duration.maximum);
-    try std.testing.expectEqual(@as(?u64, terminal_monitor.minimum_schedule_ms), notification_interval.minimum);
-    try std.testing.expectEqual(@as(?u64, terminal_monitor.maximum_schedule_ms), notification_interval.maximum);
-    try std.testing.expectEqual(@as(?u64, 1), lifetime_duration.minimum);
-    try std.testing.expectEqual(@as(?u64, terminal_monitor.maximum_lifetime_ms), lifetime_duration.maximum);
-    try std.testing.expectEqual(@as(?u64, terminal_monitor.minimum_schedule_ms), check_interval.minimum);
-    try std.testing.expectEqual(@as(?u64, terminal_monitor.maximum_schedule_ms), check_interval.maximum);
+    try std.testing.expectEqual(@as(?u64, terminal_monitor.minimum_schedule_ms), output_quiet_duration.bounds.?.minimum);
+    try std.testing.expectEqual(@as(?u64, terminal_monitor.maximum_schedule_ms), output_quiet_duration.bounds.?.maximum);
+    try std.testing.expectEqual(@as(?u64, terminal_monitor.minimum_schedule_ms), notification_interval.bounds.?.minimum);
+    try std.testing.expectEqual(@as(?u64, terminal_monitor.maximum_schedule_ms), notification_interval.bounds.?.maximum);
+    try std.testing.expectEqual(@as(?u64, 1), lifetime_duration.bounds.?.minimum);
+    try std.testing.expectEqual(@as(?u64, terminal_monitor.maximum_lifetime_ms), lifetime_duration.bounds.?.maximum);
+    try std.testing.expectEqual(@as(?u64, terminal_monitor.minimum_schedule_ms), check_interval.bounds.?.minimum);
+    try std.testing.expectEqual(@as(?u64, terminal_monitor.maximum_schedule_ms), check_interval.bounds.?.maximum);
     try std.testing.expectEqualStrings(
         "Required for path conditions. The path must resolve within the terminal workspace; external paths are rejected.",
         monitor_path.description,
@@ -1586,9 +1689,9 @@ test "terminal exec-only schema reuses exec structure with focused descriptions"
         terminal_exec_only_timeout_description,
         timeout.description,
     );
-    try std.testing.expectEqual(@as(?u64, terminal_impl.exec_timeout_min_ms), timeout.minimum);
-    try std.testing.expectEqual(@as(?u64, terminal_impl.exec_timeout_max_ms), timeout.maximum);
-    try std.testing.expect(!timeout.nullable);
+    try std.testing.expectEqual(@as(?u64, terminal_impl.exec_timeout_min_ms), timeout.bounds.?.minimum);
+    try std.testing.expectEqual(@as(?u64, terminal_impl.exec_timeout_max_ms), timeout.bounds.?.maximum);
+    try std.testing.expect(timeout.nullable == null);
 }
 
 test "terminal gateway advertisement projects a provider-compatible object schema" {
@@ -1893,9 +1996,9 @@ pub const advertisement_order = [_][]const u8{
     "create_folder",
     "terminal",
     "subagent",
+    "capability_search",
     "skill",
     "install_skill",
-    "mcp_search_tools",
     "mcp_select_tool",
     "mcp_features",
     "memory",
@@ -1965,6 +2068,8 @@ test "built-in tools register exact active local order" {
         "web_fetch",
         "web_search",
         "terminal",
+        "capability_search",
+        "skill_search",
         "skill",
         "install_skill",
         "subagent",
@@ -1977,8 +2082,9 @@ test "built-in tools register exact active local order" {
     };
 
     try std.testing.expectEqual(expected_names.len, all.len);
-    for (expected_names, all) |expected, tool| {
-        try std.testing.expectEqualStrings(expected, tool.name);
+    for (expected_names, 0..) |expected, index| {
+        if (index >= all.len) return error.TestExpectedEqual;
+        try std.testing.expectEqualStrings(expected, all[index].name);
     }
 }
 
@@ -1988,6 +2094,10 @@ test "built-in tool lookup and metadata use registered defaults" {
     try std.testing.expectEqual(types.ToolActivityKind.command, toolActivityKind("terminal"));
     try std.testing.expect(toolRequiresApproval("terminal"));
     try std.testing.expect(toolHasPermissionContract("terminal"));
+    try std.testing.expect(lookup("capability_search") != null);
+    try std.testing.expect(lookup("skill_search") != null);
+    try std.testing.expect(!skill_search.model_visible);
+    try std.testing.expect(!mcp_search_tools.model_visible);
     try std.testing.expect(lookup("run_command") == null);
     try std.testing.expect(lookup("missing_tool") == null);
 }
@@ -2612,6 +2722,41 @@ test "built-in install_skill owns product metadata and schema" {
     try std.testing.expectEqualStrings("Installed skill", install_skill.completed_action_label);
 }
 
+test "built-in skill_search owns bounded metadata schema and callbacks" {
+    const schema_json = try tool_specs.toolGatewaySchemaJson(std.testing.allocator, skill_search);
+    defer std.testing.allocator.free(schema_json);
+
+    try std.testing.expectEqualStrings("skill_search", skill_search.name);
+    try std.testing.expect(std.mem.find(u8, skill_search.description, "without loading skill instructions") != null);
+    try std.testing.expect(std.mem.find(u8, schema_json, "\"query\":{\"type\":\"string\",\"maxLength\":4096") != null);
+    try std.testing.expect(std.mem.find(u8, schema_json, "\"required\":[\"query\"]") != null);
+    try std.testing.expectEqual(tool_dispatch.ExecutorKind.skill, skill_search.executor_kind);
+    try std.testing.expectEqual(types.ToolActivityKind.read, skill_search.activity_kind);
+    try std.testing.expect(!skill_search.requires_approval);
+    try std.testing.expectEqual(tool_dispatch.LabelArgKind.query, skill_search.label_arg_kind);
+    try std.testing.expect(skill_search.decode == skill_search_impl.decode);
+    try std.testing.expect(skill_search.call == skill_search_impl.call);
+    try std.testing.expect(skill_search.reads_only_fn == skill_search_impl.readsOnly);
+}
+
+test "built-in capability_search owns unified bounded metadata schema and callbacks" {
+    const schema_json = try tool_specs.toolGatewaySchemaJson(std.testing.allocator, capability_search);
+    defer std.testing.allocator.free(schema_json);
+
+    try std.testing.expectEqualStrings("capability_search", capability_search.name);
+    try std.testing.expect(std.mem.find(u8, capability_search.description, "skill metadata and configured MCP tool metadata together") != null);
+    try std.testing.expect(std.mem.find(u8, schema_json, "\"query\":{\"type\":\"string\",\"maxLength\":4096") != null);
+    try std.testing.expect(std.mem.find(u8, schema_json, "\"required\":[\"query\"]") != null);
+    try std.testing.expect(capability_search.model_visible);
+    try std.testing.expectEqual(tool_dispatch.ExecutorKind.skill, capability_search.executor_kind);
+    try std.testing.expectEqual(types.ToolActivityKind.read, capability_search.activity_kind);
+    try std.testing.expect(!capability_search.requires_approval);
+    try std.testing.expectEqual(tool_dispatch.LabelArgKind.query, capability_search.label_arg_kind);
+    try std.testing.expect(capability_search.decode == capability_search_impl.decode);
+    try std.testing.expect(capability_search.call == capability_search_impl.call);
+    try std.testing.expect(capability_search.reads_only_fn == capability_search_impl.readsOnly);
+}
+
 test "built-in mcp_search_tools owns product metadata schema and callbacks" {
     const schema_json = try tool_specs.toolGatewaySchemaJson(std.testing.allocator, mcp_search_tools);
     defer std.testing.allocator.free(schema_json);
@@ -2621,6 +2766,7 @@ test "built-in mcp_search_tools owns product metadata schema and callbacks" {
     try std.testing.expect(std.mem.find(u8, mcp_search_tools.description, "metadata for configured MCP/dynamic tools") != null);
     try std.testing.expect(std.mem.find(u8, mcp_search_tools.description, "memory, skill, or ask-user work") == null);
     try std.testing.expect(std.mem.find(u8, schema_json, "\"query\":{\"type\":\"string\"") != null);
+    try std.testing.expect(std.mem.find(u8, schema_json, "\"maxLength\":4096") != null);
     try std.testing.expect(std.mem.find(u8, schema_json, "\"limit\":{\"type\":\"integer\"") != null);
     try std.testing.expect(std.mem.find(u8, schema_json, "\"required\":[\"query\"]") != null);
     try std.testing.expectEqual(tool_dispatch.ExecutorKind.mcp_search_tools, mcp_search_tools.executor_kind);

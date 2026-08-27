@@ -2343,7 +2343,7 @@ describe("modern MCP stdio compatibility", () => {
         const activeGateway = startToolGateway(`${surface} terminal-safe elicitation complete.`);
         gateway = activeGateway;
         const stderrPath = join(root.root, "stderr.log");
-        const binary = join(REPO_ROOT, "zig-out", "bin", "fx");
+        const binary = join(REPO_ROOT, "zig-out", "bin", "ax");
         tui = await TmuxSession.create({
           isolated: true,
           ...(surface === "Ask"
@@ -2420,7 +2420,7 @@ describe("modern MCP stdio compatibility", () => {
         const activeGateway = startToolGateway(`${surface} collision form complete.`);
         gateway = activeGateway;
         const stderrPath = join(root.root, "stderr.log");
-        const binary = join(REPO_ROOT, "zig-out", "bin", "fx");
+        const binary = join(REPO_ROOT, "zig-out", "bin", "ax");
         tui = await TmuxSession.create({
           isolated: true,
           ...(surface === "Ask"
@@ -2708,7 +2708,7 @@ describe("modern MCP stdio compatibility", () => {
       });
       const activeGateway = startToolGateway("Interactive Ask elicitation complete.");
       gateway = activeGateway;
-      const binary = join(REPO_ROOT, "zig-out", "bin", "fx");
+      const binary = join(REPO_ROOT, "zig-out", "bin", "ax");
       const prompt = "Call the MRTR MCP fixture interactively.";
       tui = await TmuxSession.create({
         isolated: true,
@@ -2763,7 +2763,7 @@ describe("modern MCP stdio compatibility", () => {
         });
         const activeGateway = startToolGateway(`Legacy ${legacyVersion} elicitation complete.`);
         gateway = activeGateway;
-        const binary = join(REPO_ROOT, "zig-out", "bin", "fx");
+        const binary = join(REPO_ROOT, "zig-out", "bin", "ax");
         tui = await TmuxSession.create({
           isolated: true,
           cmd: `${JSON.stringify(binary)} ask --auto --no-save ${JSON.stringify("Call the direct legacy elicitation fixture.")}`,
@@ -2834,7 +2834,7 @@ describe("modern MCP stdio compatibility", () => {
       );
       const activeGateway = startToolGateway("Legacy URL-required complete.");
       gateway = activeGateway;
-      const binary = join(REPO_ROOT, "zig-out", "bin", "fx");
+      const binary = join(REPO_ROOT, "zig-out", "bin", "ax");
       try {
         tui = await TmuxSession.create({
           isolated: true,
@@ -2897,7 +2897,7 @@ describe("modern MCP stdio compatibility", () => {
       );
       const activeGateway = startToolGateway("Legacy multiple URL completion complete.");
       gateway = activeGateway;
-      const binary = join(REPO_ROOT, "zig-out", "bin", "fx");
+      const binary = join(REPO_ROOT, "zig-out", "bin", "ax");
       tui = await TmuxSession.create({
         isolated: true,
         cmd: `${JSON.stringify(binary)} ask --auto --no-save ${JSON.stringify("Call the multiple legacy URL fixture.")}`,
@@ -2966,7 +2966,7 @@ describe("modern MCP stdio compatibility", () => {
       );
       const activeGateway = startToolGateway("Legacy malformed completion complete.");
       gateway = activeGateway;
-      const binary = join(REPO_ROOT, "zig-out", "bin", "fx");
+      const binary = join(REPO_ROOT, "zig-out", "bin", "ax");
       tui = await TmuxSession.create({
         isolated: true,
         cmd: `${JSON.stringify(binary)} ask --auto --no-save ${JSON.stringify("Call the malformed completion fixture.")}`,
@@ -3019,7 +3019,7 @@ describe("modern MCP stdio compatibility", () => {
       });
       const activeGateway = startToolGateway("must not complete");
       gateway = activeGateway;
-      const binary = join(REPO_ROOT, "zig-out", "bin", "fx");
+      const binary = join(REPO_ROOT, "zig-out", "bin", "ax");
       const fakeBin = join(root.root, "fake-bin");
       mkdirSync(fakeBin);
       writeFakeUrlOpeners(fakeBin, "#!/bin/sh\nexit 0\n");
@@ -3061,7 +3061,7 @@ describe("modern MCP stdio compatibility", () => {
       });
       const activeGateway = startToolGateway("Legacy URL timeout handled.");
       gateway = activeGateway;
-      const binary = join(REPO_ROOT, "zig-out", "bin", "fx");
+      const binary = join(REPO_ROOT, "zig-out", "bin", "ax");
       const fakeBin = join(root.root, "fake-bin");
       mkdirSync(fakeBin);
       writeFakeUrlOpeners(fakeBin, "#!/bin/sh\nexit 0\n");
@@ -3139,7 +3139,7 @@ describe("modern MCP stdio compatibility", () => {
         ], {
           models: [{ id: MODEL, type: "language", tags: ["tool-use"] }],
         });
-        const binary = join(REPO_ROOT, "zig-out", "bin", "fx");
+        const binary = join(REPO_ROOT, "zig-out", "bin", "ax");
         tui = await TmuxSession.create({
           isolated: true,
           cmd: `${JSON.stringify(binary)} ask --auto --no-save ${JSON.stringify(`Use the legacy ${operation} URL-required fixture.`)}`,
@@ -3189,7 +3189,7 @@ describe("modern MCP stdio compatibility", () => {
       });
       const activeGateway = startToolGateway("Interactive Ask full form complete.");
       gateway = activeGateway;
-      const binary = join(REPO_ROOT, "zig-out", "bin", "fx");
+      const binary = join(REPO_ROOT, "zig-out", "bin", "ax");
       tui = await TmuxSession.create({
         isolated: true,
         cmd: `${JSON.stringify(binary)} ask --auto --no-save ${JSON.stringify("Complete the full MCP form.")}`,
@@ -3322,7 +3322,7 @@ describe("modern MCP stdio compatibility", () => {
       );
       const activeGateway = startToolGateway("Interactive Ask URL elicitation complete.");
       gateway = activeGateway;
-      const binary = join(REPO_ROOT, "zig-out", "bin", "fx");
+      const binary = join(REPO_ROOT, "zig-out", "bin", "ax");
       try {
         tui = await TmuxSession.create({
           isolated: true,
@@ -3403,7 +3403,7 @@ describe("modern MCP stdio compatibility", () => {
       );
       const activeGateway = startToolGateway("Interactive Ask URL refusal complete.");
       gateway = activeGateway;
-      const binary = join(REPO_ROOT, "zig-out", "bin", "fx");
+      const binary = join(REPO_ROOT, "zig-out", "bin", "ax");
       try {
         tui = await TmuxSession.create({
           isolated: true,
@@ -4016,7 +4016,7 @@ describe("modern MCP stdio compatibility", () => {
         "Dynamic MCP tool not selected for this model step",
       );
       expect(postReloadResult?.body).toContain(
-        "Use mcp_search_tools and mcp_select_tool first",
+        "Use capability_search and mcp_select_tool first",
       );
       expect(postReloadResult?.body).not.toContain(`Unsupported tool: ${TOOL_NAME}`);
       const calls = readWire(root.wireLogPath).filter((entry) =>

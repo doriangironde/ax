@@ -329,9 +329,17 @@ pub fn storeApiKey(
     }
     if (!found) return error.CustomProviderNotFound;
 
+    try writeDocument(alloc, path, parsed.value);
+}
+
+/// Writes a registry document atomically with private permissions: a
+/// same-directory temp file, then rename. The document may reference memory
+/// owned by the caller (for example slices of the original file bytes), which
+/// must stay alive for the duration of this call.
+fn writeDocument(alloc: Allocator, path: []const u8, value: std.json.Value) !void {
     var out: std.Io.Writer.Allocating = .init(alloc);
     defer out.deinit();
-    try std.json.Stringify.value(parsed.value, .{}, &out.writer);
+    try std.json.Stringify.value(value, .{}, &out.writer);
 
     const tmp_path = try std.fmt.allocPrint(alloc, "{s}.tmp", .{path});
     defer alloc.free(tmp_path);
@@ -402,10 +410,362 @@ test "storeApiKey rejects an unknown provider name" {
     );
 }
 
+fn writeFixtureRegistry(alloc: Allocator, home: []const u8, document: []const u8) !void {
+    const fx_dir = try std.fs.path.join(alloc, &.{ home, ".fx" });
+    defer alloc.free(fx_dir);
+    try io_mod.makeDirRecursive(fx_dir);
+    const path = try std.fs.path.join(alloc, &.{ home, ".fx", "providers.json" });
+    defer alloc.free(path);
+    var file = try std.Io.Dir.createFileAbsolute(io_mod.getIo(), path, .{ .truncate = true });
+    defer file.close(io_mod.getIo());
+    try file.writeStreamingAll(io_mod.getIo(), document);
+}
+
+fn makeFetched(alloc: Allocator, ids: []const []const u8) ![]ModelEntry {
+    const entries = try alloc.alloc(ModelEntry, ids.len);
+    for (ids, 0..) |id, index| {
+        entries[index] = .{ .id = try alloc.dupe(u8, id) };
+    }
+    return entries;
+}
+
+fn freeFetched(alloc: Allocator, entries: []ModelEntry) void {
+    for (entries) |*entry| entry.deinit(alloc);
+    alloc.free(entries);
+}
+
+test "refreshModels merges a fetched catalog and preserves metadata" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const home = try io_mod.dirRealpathAlloc(alloc, tmp.dir, "");
+    defer alloc.free(home);
+    try writeFixtureRegistry(
+        alloc,
+        home,
+        "{\"providers\":[{\"name\":\"opencode-go\",\"base_url\":\"https://opencode.ai/zen/go/v1\"," ++
+            "\"api_key_env\":\"OPENCODE_GO_API_KEY\",\"models\":[" ++
+            "{\"id\":\"glm-5.2\",\"context_window\":131072,\"reasoning\":true}," ++
+            "{\"id\":\"old-model\",\"vision\":true}," ++
+            "{\"id\":\"drop-me\"}]}," ++
+            "{\"name\":\"other\",\"base_url\":\"https://other.test\",\"models\":[{\"id\":\"m\"}]}]}",
+    );
+
+    const fetched = try alloc.alloc(ModelEntry, 2);
+    fetched[0] = .{ .id = try alloc.dupe(u8, "glm-5.2"), .max_output_tokens = 32_768 };
+    fetched[1] = .{ .id = try alloc.dupe(u8, "new-model") };
+    defer freeFetched(alloc, fetched);
+
+    const summary = try refreshModels(alloc, home, "opencode-go", null, fetched);
+    try std.testing.expectEqual(@as(usize, 1), summary.added);
+    try std.testing.expectEqual(@as(usize, 1), summary.kept);
+    try std.testing.expectEqual(@as(usize, 2), summary.removed);
+    try std.testing.expectEqual(@as(usize, 0), summary.retained);
+    try std.testing.expectEqual(@as(usize, 2), summary.models);
+    try std.testing.expect(!summary.truncated);
+
+    var registry = try load(alloc, home);
+    defer registry.deinit(alloc);
+    const entry = registry.find("opencode-go").?;
+    try std.testing.expectEqual(@as(usize, 2), entry.models.items.len);
+    try std.testing.expectEqualStrings("glm-5.2", entry.models.items[0].id);
+    // Kept models keep their declared metadata; the fetched value wins per field.
+    try std.testing.expectEqual(@as(?u32, 131072), entry.models.items[0].context_window);
+    try std.testing.expect(entry.models.items[0].reasoning);
+    try std.testing.expectEqual(@as(?u32, 32_768), entry.models.items[0].max_output_tokens);
+    try std.testing.expect(!entry.models.items[0].vision);
+    try std.testing.expectEqualStrings("new-model", entry.models.items[1].id);
+    // The untouched sibling entry keeps its shape.
+    try std.testing.expectEqual(@as(usize, 1), registry.find("other").?.models.items.len);
+}
+
+test "refreshModels retains the selected model when the endpoint drops it" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const home = try io_mod.dirRealpathAlloc(alloc, tmp.dir, "");
+    defer alloc.free(home);
+    try writeFixtureRegistry(
+        alloc,
+        home,
+        "{\"providers\":[{\"name\":\"mock\",\"base_url\":\"http://127.0.0.1:9/v1\",\"models\":[" ++
+            "{\"id\":\"keep-me\",\"context_window\":8192}," ++
+            "{\"id\":\"drop-me\"}]}]}",
+    );
+
+    const fetched = try makeFetched(alloc, &.{"brand-new"});
+    defer freeFetched(alloc, fetched);
+
+    const summary = try refreshModels(alloc, home, "mock", "keep-me", fetched);
+    try std.testing.expectEqual(@as(usize, 1), summary.added);
+    try std.testing.expectEqual(@as(usize, 1), summary.retained);
+    try std.testing.expectEqual(@as(usize, 1), summary.removed);
+    try std.testing.expectEqual(@as(usize, 2), summary.models);
+
+    var registry = try load(alloc, home);
+    defer registry.deinit(alloc);
+    const entry = registry.find("mock").?;
+    // The retained selection comes first so it stays the usable default.
+    try std.testing.expectEqual(@as(usize, 2), entry.models.items.len);
+    try std.testing.expectEqualStrings("keep-me", entry.models.items[0].id);
+    try std.testing.expectEqual(@as(?u32, 8192), entry.models.items[0].context_window);
+    try std.testing.expectEqualStrings("brand-new", entry.models.items[1].id);
+}
+
+test "refreshModels retains the previous default when nothing is selected" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const home = try io_mod.dirRealpathAlloc(alloc, tmp.dir, "");
+    defer alloc.free(home);
+    try writeFixtureRegistry(
+        alloc,
+        home,
+        "{\"providers\":[{\"name\":\"mock\",\"base_url\":\"http://127.0.0.1:9/v1\",\"models\":[" ++
+            "{\"id\":\"default-one\"},{\"id\":\"second\"}]}]}",
+    );
+
+    const fetched = try makeFetched(alloc, &.{"replacement"});
+    defer freeFetched(alloc, fetched);
+
+    const summary = try refreshModels(alloc, home, "mock", null, fetched);
+    try std.testing.expectEqual(@as(usize, 1), summary.added);
+    try std.testing.expectEqual(@as(usize, 1), summary.retained);
+    try std.testing.expectEqual(@as(usize, 1), summary.removed);
+    var refreshed = try load(alloc, home);
+    defer refreshed.deinit(alloc);
+    try std.testing.expectEqualStrings("default-one", refreshed.find("mock").?.models.items[0].id);
+}
+
+test "refreshModels rejects an unknown provider and an empty catalog" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const home = try io_mod.dirRealpathAlloc(alloc, tmp.dir, "");
+    defer alloc.free(home);
+    try writeFixtureRegistry(
+        alloc,
+        home,
+        "{\"providers\":[{\"name\":\"mock\",\"base_url\":\"http://127.0.0.1:9/v1\",\"models\":[{\"id\":\"m\"}]}]}",
+    );
+
+    const fetched = try makeFetched(alloc, &.{"replacement"});
+    defer freeFetched(alloc, fetched);
+    try std.testing.expectError(
+        error.CustomProviderNotFound,
+        refreshModels(alloc, home, "missing", null, fetched),
+    );
+
+    const none = try alloc.alloc(ModelEntry, 0);
+    defer alloc.free(none);
+    // An empty fetched catalog retains the previous default instead of
+    // wiping the entry...
+    const summary = try refreshModels(alloc, home, "mock", null, none);
+    try std.testing.expectEqual(@as(usize, 1), summary.retained);
+    try std.testing.expectEqual(@as(usize, 1), summary.models);
+}
+
+test "refreshModels rejects an absent models list with an empty catalog" {
+    const alloc = std.testing.allocator;
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    const home = try io_mod.dirRealpathAlloc(alloc, tmp.dir, "");
+    defer alloc.free(home);
+    try writeFixtureRegistry(
+        alloc,
+        home,
+        "{\"providers\":[{\"name\":\"empty\",\"base_url\":\"http://127.0.0.1:9/v1\"}]}",
+    );
+    const none = try alloc.alloc(ModelEntry, 0);
+    defer alloc.free(none);
+    try std.testing.expectError(
+        error.EmptyModelsCatalog,
+        refreshModels(alloc, home, "empty", null, none),
+    );
+}
+
 /// Resolves the configured key for an entry: the env reference wins, then the
 /// inline key. Returns null when the provider declares no usable key.
 pub fn resolveApiKey(alloc: Allocator, entry: *const Entry) !?[]u8 {
     return resolveApiKeyWith(alloc, entry, io_mod.getenv);
+}
+
+pub const ModelRefreshSummary = struct {
+    added: usize = 0,
+    kept: usize = 0,
+    removed: usize = 0,
+    retained: usize = 0,
+    truncated: bool = false,
+    models: usize = 0,
+};
+
+/// Merges a fetched model catalog into a registered provider's entry in
+/// providers.json, atomically, preserving every other entry verbatim. `fetched`
+/// entries are borrowed for the duration of the write (their ids are
+/// transcribed into the on-disk document); the caller owns and frees them.
+///
+/// Merge policy:
+/// - Models the endpoint no longer advertises are removed, except one retained
+///   model so the provider keeps a usable default: the currently selected
+///   model when `selected_model` is set, otherwise the previous first model.
+/// - Models that already exist keep their declared metadata, with the fetched
+///   metadata winning per field.
+/// - The merged list is capped at `max_models_per_provider`; retained models
+///   come first so the selection survives truncation.
+pub fn refreshModels(
+    alloc: Allocator,
+    home_dir: []const u8,
+    provider_name: []const u8,
+    selected_model: ?[]const u8,
+    fetched: []ModelEntry,
+) !ModelRefreshSummary {
+    const path = try providersPath(alloc, home_dir);
+    defer alloc.free(path);
+    var file = try std.Io.Dir.openFileAbsolute(io_mod.getIo(), path, .{ .mode = .read_only });
+    defer file.close(io_mod.getIo());
+    const bytes = try io_mod.readFileToEnd(alloc, &file, max_registry_bytes);
+    defer alloc.free(bytes);
+
+    var parsed = try std.json.parseFromSlice(std.json.Value, alloc, bytes, .{});
+    defer parsed.deinit();
+    if (parsed.value != .object) return error.InvalidCustomProvidersConfig;
+    const providers_value = parsed.value.object.getPtr("providers") orelse
+        return error.InvalidCustomProvidersConfig;
+    if (providers_value.* != .array) return error.InvalidCustomProvidersConfig;
+
+    var entry_value: ?*std.json.Value = null;
+    for (providers_value.array.items) |*item| {
+        if (item.* != .object) continue;
+        const name_value = item.object.get("name") orelse continue;
+        if (name_value != .string or !std.mem.eql(u8, name_value.string, provider_name)) continue;
+        entry_value = item;
+        break;
+    }
+    const entry = entry_value orelse return error.CustomProviderNotFound;
+
+    var old_array: ?*std.json.Value = null;
+    if (entry.object.getPtr("models")) |models_ptr| {
+        if (models_ptr.* != .array) return error.InvalidCustomProvidersConfig;
+        old_array = models_ptr;
+    }
+    const old_models: []const std.json.Value = if (old_array) |value|
+        value.array.items
+    else
+        &.{};
+    if (old_models.len > max_models_per_provider) return error.InvalidCustomProvidersConfig;
+
+    // The provider's previous default: its first model (or the explicit
+    // selection) is retained when the endpoint drops it.
+    const old_default: ?[]const u8 = blk: {
+        if (old_models.len == 0 or old_models[0] != .object) break :blk null;
+        const id_value = old_models[0].object.get("id") orelse break :blk null;
+        if (id_value != .string) break :blk null;
+        break :blk id_value.string;
+    };
+    const retained_id: ?[]const u8 = selected_model orelse old_default;
+
+    // The merged list lives in the parsed document's arena so the document's
+    // own deinit reclaims it; nothing here frees it separately.
+    const arena_alloc = parsed.arena.allocator();
+    var summary: ModelRefreshSummary = .{};
+    var new_models: std.json.Array = .init(arena_alloc);
+
+    // Retained first so truncation never drops the selection.
+    for (old_models) |*old_model| {
+        if (old_model.* != .object) continue;
+        const id_value = old_model.object.get("id") orelse continue;
+        if (id_value != .string) continue;
+        if (findFetchedModel(fetched, id_value.string) != null) continue;
+        if (retained_id != null and std.mem.eql(u8, id_value.string, retained_id.?)) {
+            try new_models.append(try cloneModelObject(arena_alloc, old_model));
+            summary.retained += 1;
+            continue;
+        }
+        summary.removed += 1;
+    }
+
+    for (fetched) |*model| {
+        const old_model = findOldModel(old_models, model.id);
+        if (old_model != null) {
+            summary.kept += 1;
+        } else {
+            summary.added += 1;
+        }
+        try new_models.append(try modelJsonObject(arena_alloc, old_model, model));
+    }
+
+    if (new_models.items.len == 0) return error.EmptyModelsCatalog;
+    if (new_models.items.len > max_models_per_provider) {
+        new_models.shrinkRetainingCapacity(max_models_per_provider);
+        summary.truncated = true;
+    }
+    summary.models = new_models.items.len;
+
+    const new_array: std.json.Value = .{ .array = new_models };
+    if (entry.object.getPtr("models")) |models_ptr| {
+        models_ptr.* = new_array;
+    } else {
+        try entry.object.put(arena_alloc, "models", new_array);
+    }
+    try writeDocument(alloc, path, parsed.value);
+    return summary;
+}
+
+/// Deep-copies a model object into freshly owned allocations. Referenced
+/// strings stay slices into the source document, which outlives the copy.
+fn cloneModelObject(alloc: Allocator, value: *const std.json.Value) !std.json.Value {
+    var object: std.json.ObjectMap = .empty;
+    errdefer object.deinit(alloc);
+    var it = value.object.iterator();
+    while (it.next()) |entry| {
+        try object.put(alloc, entry.key_ptr.*, entry.value_ptr.*);
+    }
+    return .{ .object = object };
+}
+
+fn findFetchedModel(fetched: []const ModelEntry, id: []const u8) ?*const ModelEntry {
+    for (fetched) |*model| {
+        if (std.mem.eql(u8, model.id, id)) return model;
+    }
+    return null;
+}
+
+fn findOldModel(models: []const std.json.Value, id: []const u8) ?*const std.json.Value {
+    for (models) |*model| {
+        if (model.* != .object) continue;
+        const id_value = model.object.get("id") orelse continue;
+        if (id_value != .string or !std.mem.eql(u8, id_value.string, id)) continue;
+        return model;
+    }
+    return null;
+}
+
+fn modelJsonObject(
+    alloc: Allocator,
+    old: ?*const std.json.Value,
+    fetched: *const ModelEntry,
+) !std.json.Value {
+    var object: std.json.ObjectMap = .empty;
+    errdefer object.deinit(alloc);
+    const id: []const u8 = if (old) |value| value.object.get("id").?.string else fetched.id;
+    try object.put(alloc, "id", .{ .string = id });
+    const context_window = fetched.context_window orelse (if (old) |value|
+        unsignedField(value.object, "context_window")
+    else
+        null);
+    if (context_window) |value| try object.put(alloc, "context_window", .{ .integer = value });
+    const max_output_tokens = fetched.max_output_tokens orelse (if (old) |value|
+        unsignedField(value.object, "max_output_tokens")
+    else
+        null);
+    if (max_output_tokens) |value| try object.put(alloc, "max_output_tokens", .{ .integer = value });
+    if (fetched.reasoning or (if (old) |value| boolField(value.object, "reasoning") orelse false else false))
+        try object.put(alloc, "reasoning", .{ .bool = true });
+    if (fetched.vision or (if (old) |value| boolField(value.object, "vision") orelse false else false))
+        try object.put(alloc, "vision", .{ .bool = true });
+    if (fetched.file_input or (if (old) |value| boolField(value.object, "file_input") orelse false else false))
+        try object.put(alloc, "file_input", .{ .bool = true });
+    return .{ .object = object };
 }
 
 /// Testable variant: `lookup` answers env references so key precedence can be

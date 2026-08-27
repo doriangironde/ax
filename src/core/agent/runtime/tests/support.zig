@@ -12,6 +12,8 @@ const builtin_gateway = @import("../../../../builtins/gateway.zig");
 const builtin_tools = @import("../../../../builtins/tools.zig");
 const session_runtime = @import("../../../session/session.zig");
 const session_codec = @import("../../../session/session_codec.zig");
+const session_usage = @import("../../../session/session_usage.zig");
+const model_provider = @import("../../../config/model_provider.zig");
 const command_replay_store = @import("../../../session/command_replay_store.zig");
 const session_child_store = @import("../../../session/session_child_store.zig");
 const lifecycle_hooks = @import("../../../hooks/hooks.zig");
@@ -216,6 +218,9 @@ pub const FakeCompletion = struct {
     finish_reason: ?types.ProviderFinishReason = null,
     omit_finish: bool = false,
     usage: types.Usage = .{},
+    generation_id: ?[]const u8 = null,
+    billing: ?types.ProviderBilling = null,
+    exact_usage_provider: ?model_provider.ProviderId = null,
     delivery_ambiguous: bool = false,
     pause_before_output: bool = false,
     cancel_before_output: bool = false,
@@ -346,8 +351,13 @@ pub const FakeGateway = struct {
                 else
                     completion.finish_reason orelse if (completion.tool_calls.len > 0) .tool_calls else .stop,
                 .usage = completion.usage,
+                .generation_id = completion.generation_id,
+                .billing = completion.billing,
             },
-            .usage = .{ .unavailable = .possibly_billed },
+            .usage = if (completion.exact_usage_provider) |provider_id|
+                .{ .exact = provider_id }
+            else
+                .{ .unavailable = .possibly_billed },
         } };
     }
 
@@ -597,6 +607,7 @@ pub const FakeAgentRuntimeDeps = struct {
     cancel_on_execute_delay_ms: u64 = 0,
     ordinary_cancel_on_execute_name: ?[]const u8 = null,
     session_context: ?*session_runtime.SessionRuntime = null,
+    usage: ?*session_usage.Usage = null,
     validation_not_registered_names: []const []const u8 = &.{},
     validation_failure_names: []const []const u8 = &.{},
     validation_results: []const ?[]const u8 = &.{},
@@ -754,6 +765,8 @@ pub const FakeAgentRuntimeDeps = struct {
             .format_tool_execution_error = formatError,
             .record_tool_call_rejected = recordRejected,
             .report_inner_tool_usage = reportCapturedInnerToolUsage,
+            .usage = self.usage,
+            .usage_allocator = self.alloc,
         };
     }
 

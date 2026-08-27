@@ -56,7 +56,7 @@ function startUpgradeServer(
   argvLogPath: string,
 ): { baseUrl: string; stop: () => void } {
   const artifactDir = join(root, "release-artifact");
-  const wrapperPath = join(artifactDir, "fx");
+  const wrapperPath = join(artifactDir, "ax");
   const archivePath = join(root, "ax.tar.gz");
   mkdirSync(artifactDir);
   const script = `#!/bin/sh
@@ -71,7 +71,7 @@ exec ${shellQuote(FX_BIN)} "$@"
 `;
   writeFileSync(wrapperPath, script);
   chmodSync(wrapperPath, 0o755);
-  const tar = Bun.spawnSync(["tar", "-czf", archivePath, "-C", artifactDir, "fx"]);
+  const tar = Bun.spawnSync(["tar", "-czf", archivePath, "-C", artifactDir, "ax"]);
   if (tar.exitCode !== 0) throw new Error(tar.stderr.toString());
 
   const archive = readFileSync(archivePath);
@@ -3178,7 +3178,12 @@ test.skipIf(!tmuxAvailable())(
       await active.sendKeys("3");
       await active.sendKeys("Enter");
       await active.waitForText("CTRL_O_HANDOFF_DONE", TIMEOUT);
-      const scrollback = await active.captureFullScrollback();
+      const scrollback = await active.waitForStableScrollback(
+        (value) =>
+          value.includes("CTRL_O_HANDOFF_DONE") &&
+          countOccurrences(value, priorSummary) === 1,
+        TIMEOUT,
+      );
       const inline = await active.capturePane();
       expect(inline).toContain("CTRL_O_HANDOFF_DONE");
       expect(inline).not.toContain("Apply this change?");
@@ -4320,7 +4325,7 @@ test.skipIf(!tmuxAvailable())(
     mkdirSync(home);
     mkdirSync(workspace);
     mkdirSync(binDir);
-    symlinkSync(FX_BIN, join(binDir, "fx"));
+    symlinkSync(FX_BIN, join(binDir, "ax"));
     writeFileSync(stderrPath, "");
     writeFileSync(resumedStderrPath, "");
     const initialGateway = startFakeGateway([fakeGatewayFinalText(marker)]);
@@ -4343,6 +4348,7 @@ test.skipIf(!tmuxAvailable())(
         width: 120,
         height: 32,
         remainOnExit: true,
+        isolated: true,
       });
       await active.waitForComposer(TIMEOUT);
       await active.sendText("Save this conversation for the exit handoff.");
@@ -4384,6 +4390,7 @@ test.skipIf(!tmuxAvailable())(
         stderrPath: resumedStderrPath,
         width: 120,
         height: 32,
+        isolated: true,
       });
       await active.waitForComposer(TIMEOUT);
       const resumed = stripAnsi(await waitForScrollback(active, marker));
@@ -4912,7 +4919,7 @@ test.skipIf(!tmuxAvailable())(
       const version = (await runFx(["--version"])).stdout.trim();
       await active.sendHexBytes(["07"]);
 
-      const updatedNotice = `● ax has been updated to v${version}`;
+      const updatedNotice = `● 𝒂x has been updated to v${version}`;
       await active.waitForText(updatedNotice, TIMEOUT);
       const resumed = await waitForScrollback(active, "UPGRADE_CTRL_G_INITIAL_DONE");
       expect(resumed).toContain("UPGRADE_CTRL_G_INITIAL_DONE");
@@ -5010,7 +5017,7 @@ test.skipIf(!tmuxAvailable())(
       const version = (await runFx(["--version"])).stdout.trim();
       await active.sendHexBytes(["07"]);
 
-      await active.waitForText(`● ax has been updated to v${version}`, TIMEOUT);
+      await active.waitForText(`● 𝒂x has been updated to v${version}`, TIMEOUT);
       const resumed = await waitForScrollback(
         active,
         "UPGRADE_CORRUPT_INITIAL_DONE",

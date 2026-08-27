@@ -9,6 +9,7 @@
 import { execFileSync, execSync } from "node:child_process";
 import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import net from "node:net";
 import { join } from "node:path";
 import { FX_BIN, REPO_ROOT } from "../evals/eval-helpers";
 
@@ -90,11 +91,7 @@ export function parseSingleChildPid(output: string, parentPid: number): number {
 }
 
 function resolveWindowIndex(tmuxPrefix: string[], name: string): number {
-  const raw = execFileSync(
-    "tmux",
-    [...tmuxPrefix, "display-message", "-t", name, "-p", "#{window_index}"],
-    { stdio: "pipe", encoding: "utf-8" },
-  ).trim();
+  const raw = resolveSessionProperty(tmuxPrefix, name, "#{window_index}");
   const value = Number.parseInt(raw, 10);
   if (!Number.isInteger(value) || value < 0) {
     throw new Error(`Invalid tmux window index: ${JSON.stringify(raw)}`);
@@ -103,15 +100,124 @@ function resolveWindowIndex(tmuxPrefix: string[], name: string): number {
 }
 
 function resolvePaneId(tmuxPrefix: string[], name: string): string {
-  const raw = execFileSync(
-    "tmux",
-    [...tmuxPrefix, "display-message", "-t", name, "-p", "#{pane_id}"],
-    { stdio: "pipe", encoding: "utf-8" },
-  ).trim();
+  const raw = resolveSessionProperty(tmuxPrefix, name, "#{pane_id}");
   if (!raw.startsWith("%")) {
     throw new Error(`Invalid tmux pane id: ${JSON.stringify(raw)}`);
   }
   return raw;
+}
+
+/**
+ * Removes tmux socket directories whose server process is no longer alive.
+ * A dead server's `$TMUX_TMPDIR/tmux-<pid>` directory makes every later
+ * tmux client with the default socket fail with "no server running" instead
+ * of starting a fresh server, and tmux does not clean the stale dir itself
+ * when a newer server's dir exists. Only default-socket servers are affected;
+ * isolated sessions use uniquely named `-L` sockets.
+ */
+async function sweepStaleSocketDirs(tmuxPrefix: string[]): Promise<void> {
+  if (tmuxPrefix.length > 0) return;
+  const tmpDir = process.env.TMUX_TMPDIR ?? tmpdir();
+  try {
+    for (const entry of readdirSync(tmpDir)) {
+      if (!entry.startsWith("tmux-")) continue;
+      const dir = join(tmpDir, entry);
+      try {
+        const socket = join(dir, "default");
+        // A live server accepts connections on its socket. A dir whose
+        // socket is missing (clean exit unlinks it) or refuses connections
+        // (crash with a leftover socket, or a recycled pid) is stale and
+        // makes tmux error "no server running" instead of starting fresh.
+        const alive = existsSync(socket) && (await socketIsAlive(socket));
+        if (!alive) rmSync(dir, { recursive: true, force: true });
+      } catch {}
+    }
+  } catch {}
+}
+
+/** True when a unix socket accepts a connection (a live tmux server). */
+function socketIsAlive(path: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const sock = net.connect(path);
+    sock.setTimeout(1_000);
+    sock.once("connect", () => {
+      sock.destroy();
+      resolve(true);
+    });
+    sock.once("timeout", () => {
+      sock.destroy();
+      resolve(false);
+    });
+    sock.once("error", () => resolve(false));
+  });
+}
+
+/**
+ * Whether the tmux server uses the default window and pane indexing. Servers
+ * with the defaults answer `name:0.0` targets without any query (upstream
+ * harness behavior); only non-default `base-index`/`pane-base-index`
+ * configurations (for example a user tmux.conf setting `base-index 1`) need
+ * the explicit resolution, which queries a just-created server and can race.
+ */
+function serverUsesDefaultIndices(tmuxPrefix: string[]): boolean {
+  // A freshly started server may not answer an options query on the first
+  // attempt; retry briefly before falling back to the resolution path.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const base = execFileSync(
+        "tmux",
+        [...tmuxPrefix, "show-options", "-gv", "base-index"],
+        { stdio: "pipe", encoding: "utf-8" },
+      ).trim();
+      const pane = execFileSync(
+        "tmux",
+        [...tmuxPrefix, "show-options", "-gv", "pane-base-index"],
+        { stdio: "pipe", encoding: "utf-8" },
+      ).trim();
+      return base === "0" && pane === "0";
+    } catch {
+      if (attempt + 1 < 3) {
+        try {
+          execFileSync("sleep", ["0.25"], { stdio: "pipe" });
+        } catch {}
+      }
+    }
+  }
+  // The server could not answer options queries; fall back to the
+  // explicit resolution path, which retries briefly.
+  return false;
+}
+
+/**
+ * Reads a display-message property from a just-created session. A brand-new
+ * tmux server may briefly refuse display-message on heavily loaded runners,
+ * so the query retries briefly before failing.
+ */
+function resolveSessionProperty(
+  tmuxPrefix: string[],
+  name: string,
+  property: string,
+): string {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    try {
+      return execFileSync(
+        "tmux",
+        [...tmuxPrefix, "display-message", "-t", name, "-p", property],
+        { stdio: "pipe", encoding: "utf-8" },
+      ).trim();
+    } catch (err) {
+      lastError = err;
+    }
+    if (attempt + 1 < 8) {
+      try {
+        execFileSync("sleep", ["0.25"], { stdio: "pipe" });
+      } catch {}
+    }
+  }
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`Could not resolve tmux ${property} for ${name}`);
 }
 
 export function buildObservedCommand(
@@ -559,6 +665,7 @@ export class TmuxSession {
       ? `tmux wait-for ${shellQuote(startGate)} && exec ${observedCmd}`
       : observedCmd;
     const tmuxPrefix = resolvedSocketName ? ["-L", resolvedSocketName] : [];
+    await sweepStaleSocketDirs(tmuxPrefix);
     const setupSessionName = `${name}-setup`;
     const killSetupSession = () => {
       try {
@@ -685,8 +792,11 @@ export class TmuxSession {
       rmSync(exitStatusPath, { force: true });
       throw err;
     }
-    const resolvedWindowIndex = resolveWindowIndex(tmuxPrefix, name);
-    const resolvedPaneId = resolvePaneId(tmuxPrefix, name);
+    const defaultIndices = serverUsesDefaultIndices(tmuxPrefix);
+    const resolvedWindowIndex = defaultIndices ? 0 : resolveWindowIndex(tmuxPrefix, name);
+    const resolvedPaneId = defaultIndices
+      ? `${name}:0.0`
+      : resolvePaneId(tmuxPrefix, name);
     const session = new TmuxSession(
       name,
       exitStatusPath,
@@ -890,7 +1000,7 @@ export class TmuxSession {
   }
 
   /**
-   * Complete pane history including the ANSI sequences emitted by fx.
+   * Complete pane history including the ANSI sequences emitted by ax.
    * Keep this separate from the viewport capture so transcript-order tests
    * inspect all committed output rather than only the visible rows.
    */
@@ -912,7 +1022,7 @@ export class TmuxSession {
 
   /**
    * Current pane title, which is what a terminal renders as the tab label.
-   * fx sets it through OSC 2, so this reads back what the user would see.
+   * ax sets it through OSC 2, so this reads back what the user would see.
    */
   async paneTitle(): Promise<string> {
     try {
@@ -930,7 +1040,7 @@ export class TmuxSession {
   }
 
   /**
-   * Resize the tmux window. Delivers a real SIGWINCH to fx, exercising the
+   * Resize the tmux window. Delivers a real SIGWINCH to ax, exercising the
    * resize pipeline end-to-end. Default post-resize sleep covers the 100 ms
    * debounce in src/main.zig.
    */
@@ -1214,6 +1324,36 @@ export class TmuxSession {
     }
     throw new Error(
       `Timed out waiting for stable composer in ${this.name}.\nLast pane:\n${lastPane}`,
+    );
+  }
+
+  async waitForStableScrollback(
+    predicate: (scrollback: string) => boolean,
+    timeoutMs = 15_000,
+    stableMs = 100,
+  ): Promise<string> {
+    const deadline = Date.now() + timeoutMs;
+    let stableSince: number | null = null;
+    let previousScrollback = "";
+    let lastScrollback = "";
+    while (Date.now() < deadline) {
+      const scrollback = await this.captureFullScrollback();
+      lastScrollback = scrollback;
+      if (predicate(scrollback)) {
+        if (scrollback !== previousScrollback) {
+          previousScrollback = scrollback;
+          stableSince = Date.now();
+        } else if (stableSince !== null && Date.now() - stableSince >= stableMs) {
+          return scrollback;
+        }
+      } else {
+        previousScrollback = "";
+        stableSince = null;
+      }
+      await sleep(25);
+    }
+    throw new Error(
+      `Timed out waiting for stable scrollback in ${this.name}.\nLast scrollback:\n${lastScrollback}`,
     );
   }
 

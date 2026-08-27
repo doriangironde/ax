@@ -41,7 +41,7 @@ jobs:
             echo "Tag ${TAG} missing, release needed"
           fi
 
-  build:
+  build-linux:
     needs: check-version
     if: needs.check-version.outputs.needed == 'true'
     name: Build ${{ matrix.name }}
@@ -68,7 +68,6 @@ jobs:
         run: zig build -Doptimize=ReleaseSafe -Dtarget=${{ matrix.target }}
 
       - name: Package
-        # sha256sum is available on all ubuntu runners used in this workflow
         run: |
           package_dir="$RUNNER_TEMP/fx-package-${{ matrix.name }}"
           mkdir -p "$package_dir"
@@ -95,7 +94,7 @@ jobs:
       package_release: true
 
   release:
-    needs: [check-version, build, build-macos-arm64]
+    needs: [check-version, build-linux, build-macos-arm64]
     runs-on: ubuntu-latest
     permissions:
       contents: write

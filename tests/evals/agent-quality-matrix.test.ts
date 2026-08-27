@@ -16,7 +16,7 @@ import {
 
 const INITIAL_OR_RUNNABLE_PROMPTS = [
   "Investigate how this repo changelog works in the GitHub repo.",
-  "Look for changes/last commits in fx.",
+  "Look for changes/last commits in ax.",
   "Find where slash commands are defined.",
   "Find every use of command policy.",
   "Investigate how command policy is wired in this repo.",
@@ -297,7 +297,7 @@ describe("agent quality baseline matrix", () => {
     expect(headlessFailure.tool_calls).toEqual([]);
     expect(releaseBumpChoiceBlockerSurfaced(headlessFailure.output)).toBe(true);
     expect(releaseBumpChoiceBlockerSurfaced(
-      "fx ask: repeated identical tool call requires approval",
+      "ax ask: repeated identical tool call requires approval",
     )).toBe(false);
   });
 
@@ -307,7 +307,7 @@ describe("agent quality baseline matrix", () => {
 
     expect(commandPolicyProgressSummarySurfaced(usefulSummary)).toBe(true);
     expect(commandPolicyProgressSummarySurfaced(
-      "fx ask: repeated identical tool call requires approval\nreason=tool-call-cycle",
+      "ax ask: repeated identical tool call requires approval\nreason=tool-call-cycle",
     )).toBe(false);
   });
 
@@ -339,7 +339,7 @@ describe("agent quality baseline matrix", () => {
       "Ran `bun test tests/evals/agent-quality-matrix.test.ts` (exit 0, pass). Remaining unverified: full Zig suite.",
     )).toBe(true);
     expect(focusedVerificationSummarySurfaced(
-      "fx ask: repeated identical tool call requires approval\nreason=tool-call-cycle",
+      "ax ask: repeated identical tool call requires approval\nreason=tool-call-cycle",
     )).toBe(false);
     expect(focusedVerificationSummarySurfaced(
       "Agent stopped: detected repeating tool call cycle.",

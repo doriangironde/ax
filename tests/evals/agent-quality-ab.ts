@@ -1,7 +1,7 @@
 /**
  * Model-backed A/B harness for agent-quality rows.
  *
- * This compares two explicit fx binaries on the same focused matrix rows. It is
+ * This compares two explicit ax binaries on the same focused matrix rows. It is
  * intentionally not a no-key CI gate: results are noisy model-backed signals,
  * reported as paired pass-rate deltas with raw artifacts for inspection.
  */
@@ -133,7 +133,7 @@ export function loadAbConfigFromEnv(env: NodeJS.ProcessEnv = process.env): AbCon
 
   const outputDir =
     env.FX_AB_OUTPUT_DIR ??
-    mkdtempSync(join(tmpdir(), `fx-agent-quality-ab-${Date.now()}-`));
+    mkdtempSync(join(tmpdir(), `ax-agent-quality-ab-${Date.now()}-`));
 
   return {
     baselineBin,
@@ -279,7 +279,7 @@ export async function runAbTrial(
   orderIndex: number,
 ): Promise<AbRunResult> {
   const binaryPath = sideBinary(config, side);
-  const trialHome = mkdtempSync(join(tmpdir(), `fx-ab-${row.id}-${trialIndex}-${side}-`));
+  const trialHome = mkdtempSync(join(tmpdir(), `ax-ab-${row.id}-${trialIndex}-${side}-`));
   const env: Record<string, string | undefined> = {
     PATH: process.env.PATH ?? "",
     HOME: trialHome,
