@@ -4348,6 +4348,7 @@ test.skipIf(!tmuxAvailable())(
         width: 120,
         height: 32,
         remainOnExit: true,
+        isolated: true,
       });
       await active.waitForComposer(TIMEOUT);
       await active.sendText("Save this conversation for the exit handoff.");
@@ -4389,6 +4390,7 @@ test.skipIf(!tmuxAvailable())(
         stderrPath: resumedStderrPath,
         width: 120,
         height: 32,
+        isolated: true,
       });
       await active.waitForComposer(TIMEOUT);
       const resumed = stripAnsi(await waitForScrollback(active, marker));
