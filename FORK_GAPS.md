@@ -458,6 +458,17 @@ fixture oracle checks). The fixture and the binary must always agree; if you
 ever rename the wire identity, rename fixture and binary together and bump
 the conformance baseline check in sync.
 
+### G5 — Deep rename roadmap (partially done, wire surfaces still deferred)
+
+Since the v0.0.7 release (2026-08-27):
+- `install.sh` (repo root) installs the latest release into `~/.ax/bin` with
+  sha256 verification; the README one-liner is
+  `curl -fsSL https://raw.githubusercontent.com/doriangironde/ax/main/install.sh | sh`.
+- GitHub Release assets are `ax-<platform>-<arch>.tar.gz` (macos arm64 is
+  `ax-macos-arm64.tar.gz`, linux arm64 is `ax-linux-aarch64.tar.gz`).
+- The release job no longer mirrors to the upstream CDN (no R2 credentials).
+
+What remains deferred (compatibility surfaces):
 ### G5 — Deep rename roadmap (deliberately deferred)
 
 User-facing rename is done. A full rename of the internal identity is a
